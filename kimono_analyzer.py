@@ -57,11 +57,19 @@ class KimonoAnalyzer(Gtk.Application):
         self.current_image_path = None
         self.current_dir = None
         self.notification = None
+        # Store normalized coordinates (0-1) instead of pixels
+        self.selected_magnification_point_norm = None
+        self.selected_preview_point_norm = None
+        # We'll still keep the pixel values for calculations
         self.selected_magnification_point = None
         self.selected_preview_point = None
         self.window = None
         self.progress_bar = None
         self.spinner = None
+        self.circle_area = None
+        # Track original image dimensions
+        self.original_img_width = 0
+        self.original_img_height = 0
 
     def on_activate(self, app):
         """Initialize the application window and UI components."""
@@ -179,8 +187,8 @@ class KimonoAnalyzer(Gtk.Application):
             self.notification.set_text(message)
             self.notification.set_visible(True)
 
-            # Hide notification after timeout
-            GLib.timeout_add_seconds(timeout, self._hide_notification)
+        # Hide notification after timeout
+        GLib.timeout_add_seconds(timeout, self._hide_notification)
 
     def _hide_notification(self):
         """Hide the notification."""
@@ -207,43 +215,96 @@ class KimonoAnalyzer(Gtk.Application):
 
     def open_manual_mode_window(self, file_path):
         """Open a window for manual mode editing."""
-        # Create a new window for manual mode
-        manual_window = Gtk.Window(title="Manual Mode")
-        manual_window.set_default_size(600, 400)
-
         # Load the image
         image = Image.open(file_path)
         self.current_image = image
         self.current_image_path = file_path
 
-        print(f"Loaded image with dimensions: {image.width}x{image.height}")
+        # Get image dimensions and store them
+        img_width, img_height = image.size
+        self.original_img_width = img_width
+        self.original_img_height = img_height
+        print(f"Loaded image with dimensions: {img_width}x{img_height}")
 
-        # Initialize selected points to offscreen positions
-        if self.selected_magnification_point is None:
-            self.selected_magnification_point = (-200, -200)  # Offscreen
-        if self.selected_preview_point is None:
-            self.selected_preview_point = (-600, -600)  # Offscreen
+        # Get screen dimensions
+        display = Gdk.Display.get_default()
+        monitor = display.get_monitors().get_item(0)
+        if monitor:
+            geometry = monitor.get_geometry()
+            screen_width = geometry.width
+            screen_height = geometry.height
+        else:
+            # Fallback values if we can't get screen dimensions
+            screen_width = 1920
+            screen_height = 1080
 
-        # Create a picture widget
+        # Calculate appropriate window size (80% of screen size maximum)
+        max_width = int(screen_width * 0.8)
+        max_height = int(screen_height * 0.8)
+
+        # Determine if we need to scale the image
+        scale_factor = 1.0
+        window_width = img_width
+        window_height = img_height
+
+        if img_width > max_width or img_height > max_height:
+            # Scale down while preserving aspect ratio
+            width_ratio = max_width / img_width
+            height_ratio = max_height / img_height
+            scale_factor = min(width_ratio, height_ratio)
+
+            window_width = int(img_width * scale_factor)
+            window_height = int(img_height * scale_factor)
+
+        # Create a new window for manual mode with dimensions matching the image
+        manual_window = Gtk.Window(title="Manual Mode")
+        manual_window.set_default_size(window_width, window_height)
+
+        # Initialize normalized points to offscreen
+        self.selected_magnification_point_norm = (-1.0, -1.0)  # Offscreen
+        self.selected_preview_point_norm = (-1.0, -1.0)  # Offscreen
+
+        # Initialize pixel points (we'll still need these for some calculations)
+        self.selected_magnification_point = (-200, -200)
+        self.selected_preview_point = (-600, -600)
+
+        # Create a picture widget with keep-aspect-ratio enabled
         picture = Gtk.Picture()
-        pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(file_path, 600, 400, True)
+        picture.set_keep_aspect_ratio(True)  # This is crucial for proper scaling
+        picture.set_can_shrink(True)  # Allow image to shrink when window resizes
+
+        # Load the image
+        pixbuf = GdkPixbuf.Pixbuf.new_from_file(file_path)
         texture = Gdk.Texture.new_for_pixbuf(pixbuf)
         picture.set_paintable(texture)
 
-        # Get the actual displayed size of the image
-        display_width = texture.get_width()
-        display_height = texture.get_height()
-        print(f"Display size: {display_width}x{display_height}")
+        # Make the picture expand to fill available space
+        picture.set_hexpand(True)
+        picture.set_vexpand(True)
+
+        # Store the original image dimensions for coordinate mapping
+        self.display_width = img_width
+        self.display_height = img_height
+        self.display_scale = scale_factor
+
+        print(f"Display size: {img_width}x{img_height}, Scale: {scale_factor}")
 
         # Create an overlay to draw circles on the image
         overlay = Gtk.Overlay()
         overlay.set_child(picture)
 
-        # Create a drawing area for circles - use the same size as the displayed image
+        # Create a drawing area for circles
         circle_area = Gtk.DrawingArea()
-        circle_area.set_content_width(display_width)
-        circle_area.set_content_height(display_height)
+
+        # Make the drawing area fill the entire overlay
+        circle_area.set_hexpand(True)
+        circle_area.set_vexpand(True)
+
+        # Set the drawing function
         circle_area.set_draw_func(self.on_draw_circles)
+
+        # Store a reference to the circle_area for redrawing
+        self.circle_area = circle_area
 
         # Add click gesture for mouse interaction
         click_gesture = Gtk.GestureClick()
@@ -310,6 +371,10 @@ class KimonoAnalyzer(Gtk.Application):
         # Show the window
         manual_window.present()
 
+        # Automatically run detection when the window is shown
+        # Use a short delay to ensure the window is fully rendered
+        GLib.timeout_add(500, lambda: self.rerun_detection(rerun_button))
+
     def on_draw_circles(self, widget, cr, width, height):
         """Draw circles on the overlay using Cairo."""
         if not self.current_image:
@@ -320,117 +385,127 @@ class KimonoAnalyzer(Gtk.Application):
 
         print(f"Drawing area dimensions: {width}x{height}")
         print(f"Image dimensions: {img_width}x{img_height}")
+        print(
+            f"Magnification point (normalized): {self.selected_magnification_point_norm}"
+        )
+        print(f"Preview point (normalized): {self.selected_preview_point_norm}")
 
-        # Find the parent overlay and picture widget
-        parent = widget.get_parent()
-        picture = None
-        if isinstance(parent, Gtk.Overlay):
-            picture_widget = parent.get_child()
-            if picture_widget and isinstance(picture_widget, Gtk.Picture):
-                picture = picture_widget
+        # First determine the actual image display size within the drawing area
+        # (this accounts for aspect ratio preservation)
+        display_ratio = img_width / img_height
+        widget_ratio = width / height
 
-        # If we found the picture widget, use its dimensions for scaling
-        if picture:
-            paintable = picture.get_paintable()
-            if paintable:
-                # Get the actual displayed size of the image
-                display_width = paintable.get_intrinsic_width()
-                display_height = paintable.get_intrinsic_height()
-                print(f"Displayed image size: {display_width}x{display_height}")
-
-                # Calculate the scale factors (image to display)
-                scale_x = display_width / img_width if img_width > 0 else 1
-                scale_y = display_height / img_height if img_height > 0 else 1
-
-                # Use the same scale for both dimensions to maintain aspect ratio
-                scale = min(scale_x, scale_y)
-
-                # Calculate the drawing area scale factors
-                draw_scale_x = width / display_width if display_width > 0 else 1
-                draw_scale_y = height / display_height if display_height > 0 else 1
-
-                # Calculate any letterboxing/pillarboxing offsets
-                display_ratio = display_width / display_height
-                widget_ratio = width / height
-
-                x_offset = 0
-                y_offset = 0
-
-                if display_ratio > widget_ratio:
-                    # Image is wider than widget (letterboxing - black bars on top/bottom)
-                    display_scale = width / display_width
-                    display_height_scaled = display_height * display_scale
-                    y_offset = (height - display_height_scaled) / 2
-                else:
-                    # Image is taller than widget (pillarboxing - black bars on sides)
-                    display_scale = height / display_height
-                    display_width_scaled = display_width * display_scale
-                    x_offset = (width - display_width_scaled) / 2
-            else:
-                # Fallback to simple scaling
-                scale = (
-                    min(width / img_width, height / img_height)
-                    if img_width > 0 and img_height > 0
-                    else 1
-                )
-                draw_scale_x = draw_scale_y = 1
-                x_offset = y_offset = 0
+        if display_ratio > widget_ratio:
+            # Image is wider than widget - width constrained
+            image_display_width = width
+            image_display_height = width / display_ratio
         else:
-            # Fallback to simple scaling
-            scale = (
-                min(width / img_width, height / img_height)
-                if img_width > 0 and img_height > 0
-                else 1
-            )
-            draw_scale_x = draw_scale_y = 1
-            x_offset = y_offset = 0
+            # Image is taller than widget - height constrained
+            image_display_height = height
+            image_display_width = height * display_ratio
 
+        # Calculate the scaling factor from original image to current display
+        scale_x = image_display_width / img_width
+        scale_y = image_display_height / img_height
+
+        # Calculate letterboxing/pillarboxing offsets to center the image
+        x_offset = (width - image_display_width) / 2
+        y_offset = (height - image_display_height) / 2
+
+        print(f"Image display size: {image_display_width}x{image_display_height}")
+        print(f"Scale factors: {scale_x}, {scale_y}")
+        print(f"Offsets: {x_offset}, {y_offset}")
+
+        # Draw the effective image area (for debugging)
+        cr.set_source_rgba(0.1, 0.1, 0.1, 0.05)  # Very subtle rectangle
+        cr.rectangle(x_offset, y_offset, image_display_width, image_display_height)
+        cr.fill()
+
+        # Check if we have valid normalized points for the magnification circle
         if (
-            self.selected_magnification_point
-            and self.selected_magnification_point[0] >= 0
+            self.selected_magnification_point_norm
+            and self.selected_magnification_point_norm[0] >= 0
+            and self.selected_magnification_point_norm[0] <= 1
+            and self.selected_magnification_point_norm[1] >= 0
+            and self.selected_magnification_point_norm[1] <= 1
         ):
-            # Convert image coordinates to drawing area coordinates
-            mag_x, mag_y = self.selected_magnification_point
+            # Convert normalized coordinates to viewport coordinates
+            norm_x, norm_y = self.selected_magnification_point_norm
 
-            # Scale from image coordinates to display coordinates
-            display_x = mag_x * scale
-            display_y = mag_y * scale
-
-            # Apply any letterboxing/pillarboxing offsets and drawing area scaling
-            draw_x = display_x * draw_scale_x + x_offset
-            draw_y = display_y * draw_scale_y + y_offset
+            # Map from normalized coordinates to pixel positions on displayed image
+            draw_x = x_offset + (norm_x * image_display_width)
+            draw_y = y_offset + (norm_y * image_display_height)
 
             print(f"Drawing magnification circle at: ({draw_x}, {draw_y})")
 
             # Draw the magnification circle (green)
             cr.set_source_rgba(0, 1, 0, 0.5)  # Green, semi-transparent
-            circle_radius = (
-                128 * scale * draw_scale_x
-            )  # Scale the radius based on the display
+
+            # Scale the radius based on viewport scale
+            # The baseline radius is 128 pixels at original image scale
+            circle_radius = 128 * scale_x
             cr.arc(draw_x, draw_y, circle_radius, 0, 2 * 3.14)
             cr.fill()
 
-        if self.selected_preview_point and self.selected_preview_point[0] >= 0:
-            # Convert image coordinates to drawing area coordinates
-            preview_x, preview_y = self.selected_preview_point
+            # Update pixel coordinates based on current viewport
+            pixel_x = int(norm_x * img_width)
+            pixel_y = int(norm_y * img_height)
+            self.selected_magnification_point = (pixel_x, pixel_y)
 
-            # Scale from image coordinates to display coordinates
-            display_x = preview_x * scale
-            display_y = preview_y * scale
+        # Check if we have valid normalized preview points
+        if (
+            self.selected_preview_point_norm
+            and self.selected_preview_point_norm[0] >= 0
+            and self.selected_preview_point_norm[0] <= 1
+            and self.selected_preview_point_norm[1] >= 0
+            and self.selected_preview_point_norm[1] <= 1
+        ):
+            # Convert normalized coordinates to viewport coordinates
+            norm_x, norm_y = self.selected_preview_point_norm
 
-            # Apply any letterboxing/pillarboxing offsets and drawing area scaling
-            draw_x = display_x * draw_scale_x + x_offset
-            draw_y = display_y * draw_scale_y + y_offset
+            # Map from normalized coordinates to pixel positions on displayed image
+            draw_x = x_offset + (norm_x * image_display_width)
+            draw_y = y_offset + (norm_y * image_display_height)
 
             print(f"Drawing preview circle at: ({draw_x}, {draw_y})")
 
             # Draw the preview circle (blue)
             cr.set_source_rgba(0, 0, 1, 0.5)  # Blue, semi-transparent
-            circle_radius = (
-                384 * scale * draw_scale_x
-            )  # Scale the radius based on the display
+
+            # Scale the radius based on viewport scale
+            # The baseline radius is 384 pixels at original image scale
+            circle_radius = 384 * scale_x
             cr.arc(draw_x, draw_y, circle_radius, 0, 2 * 3.14)
             cr.fill()
+
+            # Update pixel coordinates based on current viewport
+            pixel_x = int(norm_x * img_width)
+            pixel_y = int(norm_y * img_height)
+            self.selected_preview_point = (pixel_x, pixel_y)
+
+        # If both circles are visible, draw a line connecting them
+        if (
+            self.selected_magnification_point_norm
+            and self.selected_magnification_point_norm[0] >= 0
+            and self.selected_preview_point_norm
+            and self.selected_preview_point_norm[0] >= 0
+        ):
+            # Get the center points of both circles
+            mag_norm_x, mag_norm_y = self.selected_magnification_point_norm
+            prev_norm_x, prev_norm_y = self.selected_preview_point_norm
+
+            # Map to display coordinates
+            mag_draw_x = x_offset + (mag_norm_x * image_display_width)
+            mag_draw_y = y_offset + (mag_norm_y * image_display_height)
+            prev_draw_x = x_offset + (prev_norm_x * image_display_width)
+            prev_draw_y = y_offset + (prev_norm_y * image_display_height)
+
+            # Draw the connecting line
+            cr.set_source_rgba(1, 0.5, 0, 0.7)  # Orange, semi-transparent
+            cr.set_line_width(2.0)
+            cr.move_to(mag_draw_x, mag_draw_y)
+            cr.line_to(prev_draw_x, prev_draw_y)
+            cr.stroke()
 
     def on_image_click(self, gesture, n_press, x, y):
         """Handle click on the image."""
@@ -448,99 +523,78 @@ class KimonoAnalyzer(Gtk.Application):
 
             print(f"Widget dimensions: {widget_width}x{widget_height}")
             print(f"Image dimensions: {img_width}x{img_height}")
+            print(f"Click at widget coords: ({x}, {y})")
 
-            # Get the picture widget to determine the actual displayed image size
-            picture = None
-            parent = widget.get_parent()
-            if isinstance(parent, Gtk.Overlay):
-                picture_widget = parent.get_child()
-                if picture_widget and isinstance(picture_widget, Gtk.Picture):
-                    picture = picture_widget
+            # Calculate the actual displayed image size (accounting for aspect ratio)
+            display_ratio = img_width / img_height
+            widget_ratio = widget_width / widget_height
 
-            # If we found the picture widget, use its dimensions for scaling
-            if picture:
-                paintable = picture.get_paintable()
-                if paintable:
-                    # Get the actual displayed size of the image
-                    display_width = paintable.get_intrinsic_width()
-                    display_height = paintable.get_intrinsic_height()
-                    print(f"Displayed image size: {display_width}x{display_height}")
-
-                    # Calculate the scale factors (display to image)
-                    scale_x = img_width / display_width if display_width > 0 else 1
-                    scale_y = img_height / display_height if display_height > 0 else 1
-
-                    # Calculate the position within the displayed image
-                    # First, determine if there's any letterboxing/pillarboxing
-                    # (black bars on sides or top/bottom)
-                    display_ratio = display_width / display_height
-                    widget_ratio = widget_width / widget_height
-
-                    if display_ratio > widget_ratio:
-                        # Image is wider than widget (letterboxing - black bars on top/bottom)
-                        display_scale = widget_width / display_width
-                        display_height_scaled = display_height * display_scale
-                        y_offset = (widget_height - display_height_scaled) / 2
-
-                        # Check if click is within the actual image area
-                        if y < y_offset or y > (widget_height - y_offset):
-                            self.show_notification("Click outside image area")
-                            return
-
-                        # Adjust y coordinate to account for letterboxing
-                        y = (y - y_offset) / display_scale
-                        x = x / display_scale
-                    else:
-                        # Image is taller than widget (pillarboxing - black bars on sides)
-                        display_scale = widget_height / display_height
-                        display_width_scaled = display_width * display_scale
-                        x_offset = (widget_width - display_width_scaled) / 2
-
-                        # Check if click is within the actual image area
-                        if x < x_offset or x > (widget_width - x_offset):
-                            self.show_notification("Click outside image area")
-                            return
-
-                        # Adjust x coordinate to account for pillarboxing
-                        x = (x - x_offset) / display_scale
-                        y = y / display_scale
-
-                    # Convert display coordinates to image coordinates
-                    img_x = int(x * scale_x)
-                    img_y = int(y * scale_y)
-                else:
-                    # Fallback to simple scaling if no paintable
-                    scale_x = img_width / widget_width if widget_width > 0 else 1
-                    scale_y = img_height / widget_height if widget_height > 0 else 1
-                    img_x = int(x * scale_x)
-                    img_y = int(y * scale_y)
+            if display_ratio > widget_ratio:
+                # Image is wider than widget - width constrained
+                image_display_width = widget_width
+                image_display_height = widget_width / display_ratio
             else:
-                # Fallback to simple scaling if no picture widget
-                scale_x = img_width / widget_width if widget_width > 0 else 1
-                scale_y = img_height / widget_height if widget_height > 0 else 1
-                img_x = int(x * scale_x)
-                img_y = int(y * scale_y)
+                # Image is taller than widget - height constrained
+                image_display_height = widget_height
+                image_display_width = widget_height * display_ratio
 
-            # Ensure coordinates are within image bounds
-            img_x = max(0, min(img_x, img_width - 1))
-            img_y = max(0, min(img_y, img_height - 1))
+            # Calculate letterboxing/pillarboxing offsets
+            x_offset = (widget_width - image_display_width) / 2
+            y_offset = (widget_height - image_display_height) / 2
 
-            print(
-                f"Click at widget coords ({x}, {y}) -> image coords ({img_x}, {img_y})"
-            )
+            print(f"Display image size: {image_display_width}x{image_display_height}")
+            print(f"Offsets: {x_offset}, {y_offset}")
+
+            # Check if click is within the actual image area
+            if (
+                x < x_offset
+                or x > (x_offset + image_display_width)
+                or y < y_offset
+                or y > (y_offset + image_display_height)
+            ):
+                self.show_notification("Click outside image area")
+                return
+
+            # Adjust coordinates to account for letterboxing/pillarboxing
+            image_x = x - x_offset
+            image_y = y - y_offset
+
+            # Convert to normalized coordinates (0.0-1.0)
+            norm_x = image_x / image_display_width
+            norm_y = image_y / image_display_height
+
+            # Convert normalized coordinates to pixel coordinates in original image
+            pixel_x = int(norm_x * img_width)
+            pixel_y = int(norm_y * img_height)
+
+            print(f"Normalized coordinates: ({norm_x:.4f}, {norm_y:.4f})")
+            print(f"Pixel coordinates: ({pixel_x}, {pixel_y})")
+
+            # Ensure coordinates are within image bounds (redundant check)
+            if norm_x < 0 or norm_x > 1 or norm_y < 0 or norm_y > 1:
+                self.show_notification("Coordinates out of bounds")
+                return
 
             if (
                 button == 1 and state & Gdk.ModifierType.CONTROL_MASK
             ):  # Ctrl + Left click
-                self.selected_magnification_point = (img_x, img_y)
-                self.show_notification(f"Magnification point set at ({img_x}, {img_y})")
+                # Store both normalized and pixel coordinates
+                self.selected_magnification_point_norm = (norm_x, norm_y)
+                self.selected_magnification_point = (pixel_x, pixel_y)
+                self.show_notification(
+                    f"Magnification point set at ({pixel_x}, {pixel_y})"
+                )
                 print(
                     f"Magnification point selected: {self.selected_magnification_point}"
                 )
+                print(f"Normalized: {self.selected_magnification_point_norm}")
             elif button == 1:  # Left click
-                self.selected_preview_point = (img_x, img_y)
-                self.show_notification(f"Preview point set at ({img_x}, {img_y})")
+                # Store both normalized and pixel coordinates
+                self.selected_preview_point_norm = (norm_x, norm_y)
+                self.selected_preview_point = (pixel_x, pixel_y)
+                self.show_notification(f"Preview point set at ({pixel_x}, {pixel_y})")
                 print(f"Preview point selected: {self.selected_preview_point}")
+                print(f"Normalized: {self.selected_preview_point_norm}")
         else:
             # No image loaded
             self.show_notification("No image loaded")
@@ -583,18 +637,92 @@ class KimonoAnalyzer(Gtk.Application):
                     5,
                 )
 
-            self.selected_magnification_point = (
-                (interesting_area[0] + interesting_area[2]) // 2,
-                (interesting_area[1] + interesting_area[3]) // 2,
-            )
-            self.selected_preview_point = (
-                self.selected_magnification_point[0] + 128,
-                self.selected_magnification_point[1] + 128,
-            )
+            # Get image dimensions
+            img_width, img_height = self.current_image.size
+
+            # Set the magnification point (green circle) at the center of the interesting area
+            # Ensure it's not too close to the edge (green circle radius is 128px)
+            mag_x = (interesting_area[0] + interesting_area[2]) // 2
+            mag_y = (interesting_area[1] + interesting_area[3]) // 2
+
+            # Ensure magnification point is at least 128px from any edge
+            mag_radius = 128
+            mag_x = max(mag_radius, min(img_width - mag_radius, mag_x))
+            mag_y = max(mag_radius, min(img_height - mag_radius, mag_y))
+
+            # Store both pixel coordinates and normalized coordinates
+            self.selected_magnification_point = (mag_x, mag_y)
+
+            # Calculate normalized coordinates (0.0-1.0) for the magnification point
+            norm_mag_x = mag_x / img_width
+            norm_mag_y = mag_y / img_height
+            self.selected_magnification_point_norm = (norm_mag_x, norm_mag_y)
+
+            # For the preview point (blue circle), we need more padding since its radius is 384px
+            preview_radius = 384
+
+            # Calculate safe areas for the preview point
+            safe_left = preview_radius
+            safe_right = img_width - preview_radius
+            safe_top = preview_radius
+            safe_bottom = img_height - preview_radius
+
+            # If the image is too small to fit the preview circle, adjust the radius
+            if safe_right <= safe_left or safe_bottom <= safe_top:
+                # Image is too small, use a smaller radius
+                preview_radius = min(img_width, img_height) // 3
+                safe_left = preview_radius
+                safe_right = img_width - preview_radius
+                safe_top = preview_radius
+                safe_bottom = img_height - preview_radius
+
+            # Define potential preview points in the four corners within the safe area
+            corners = [
+                (safe_left, safe_top),  # Top-left
+                (safe_right, safe_top),  # Top-right
+                (safe_left, safe_bottom),  # Bottom-left
+                (safe_right, safe_bottom),  # Bottom-right
+            ]
+
+            # Find the corner farthest from the magnification point
+            max_distance = 0
+            farthest_corner = corners[0]
+
+            for corner in corners:
+                corner_x, corner_y = corner
+                # Calculate squared distance (no need for square root)
+                distance = (corner_x - mag_x) ** 2 + (corner_y - mag_y) ** 2
+                if distance > max_distance:
+                    max_distance = distance
+                    farthest_corner = corner
+
+            # Set the preview point (blue circle) in the farthest corner
+            preview_x, preview_y = farthest_corner
+            self.selected_preview_point = (preview_x, preview_y)
+
+            # Calculate normalized coordinates for the preview point
+            norm_preview_x = preview_x / img_width
+            norm_preview_y = preview_y / img_height
+            self.selected_preview_point_norm = (norm_preview_x, norm_preview_y)
+
+            print(f"Image dimensions: {img_width}x{img_height}")
+            print(f"Set magnification point at: {self.selected_magnification_point}")
+            print(f"Normalized magnification: {self.selected_magnification_point_norm}")
+            print(f"Set preview point at: {self.selected_preview_point}")
+            print(f"Normalized preview: {self.selected_preview_point_norm}")
 
             # Update the UI to show the new points
             if hasattr(self, "spinner") and self.spinner:
                 self.spinner.stop()
+
+            # Use the stored reference to the circle_area to force a redraw
+            if hasattr(self, "circle_area") and self.circle_area:
+                print("Redrawing circle area")
+                self.circle_area.queue_draw()
+            else:
+                print("Warning: No circle_area reference found for redrawing")
+
+            self.show_notification("Detection complete.")
 
     def apply_manual_changes(self, button):
         """Apply changes from manual mode."""
@@ -672,12 +800,12 @@ class KimonoAnalyzer(Gtk.Application):
             self.process_next_image()
             return True
 
-        # Single file dropped, check if it's an image
-        ext = os.path.splitext(file_path)[1].lower()
-        image_extensions = [".jpg", ".jpeg", ".png", ".bmp", ".gif"]
+            # Single file dropped, check if it's an image
+            ext = os.path.splitext(file_path)[1].lower()
+            image_extensions = [".jpg", ".jpeg", ".png", ".bmp", ".gif"]
 
-        if ext in image_extensions:
-            self.image_queue.append(file_path)
+            if ext in image_extensions:
+                self.image_queue.append(file_path)
             self.show_notification("Processing image...")
             self.process_next_image()
             return True
