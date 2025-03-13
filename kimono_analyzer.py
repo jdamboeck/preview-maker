@@ -357,6 +357,19 @@ class KimonoAnalyzer(Gtk.Application):
         self.spinner.set_valign(Gtk.Align.CENTER)
         overlay.add_overlay(self.spinner)
 
+        # Create main layout with increased spacing and margins
+        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
+        vbox.set_margin_top(20)
+        vbox.set_margin_bottom(20)
+        vbox.set_margin_start(20)
+        vbox.set_margin_end(20)
+
+        # Add a frame around the image overlay for better visual separation
+        image_frame = Gtk.Frame()
+        image_frame.set_child(overlay)
+        image_frame.set_margin_bottom(12)
+        vbox.append(image_frame)
+
         # Get the default prompt from gemini_analyzer
         default_prompt = (
             "Please analyze this kimono image and identify the most interesting "
@@ -365,44 +378,88 @@ class KimonoAnalyzer(Gtk.Application):
             "x1,y1,x2,y2 where x1,y1 is the top-left corner and x2,y2 is the bottom-right corner."
         )
 
-        # Create prompt customization field
-        prompt_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
-        prompt_label = Gtk.Label(label="Custom Gemini Prompt:")
-        prompt_box.append(prompt_label)
+        # Create prompt customization section with improved styling
+        prompt_section = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        prompt_section.set_margin_bottom(16)
 
-        # Create a text entry for the prompt
+        prompt_header = Gtk.Label(label="Custom Gemini Prompt:")
+        prompt_header.set_halign(Gtk.Align.START)
+        prompt_header.set_margin_bottom(4)
+        prompt_header.add_css_class("heading")
+        prompt_section.append(prompt_header)
+
+        # Create a text entry for the prompt with better styling
         self.prompt_entry = Gtk.TextView()
         self.prompt_entry.set_wrap_mode(Gtk.WrapMode.WORD)
         self.prompt_entry.get_buffer().set_text(default_prompt)
+        self.prompt_entry.set_top_margin(8)
+        self.prompt_entry.set_bottom_margin(8)
+        self.prompt_entry.set_left_margin(8)
+        self.prompt_entry.set_right_margin(8)
 
-        # Add scrolling for the text entry
+        # Add scrolling for the text entry with improved styling
         prompt_scroll = Gtk.ScrolledWindow()
-        prompt_scroll.set_min_content_height(80)
+        prompt_scroll.set_min_content_height(100)  # Taller text area
         prompt_scroll.set_child(self.prompt_entry)
-        prompt_box.append(prompt_scroll)
+        prompt_scroll.set_margin_bottom(4)
+        prompt_section.append(prompt_scroll)
 
-        # Add a note about the required format
+        # Add a note about the required format with improved styling
         note_label = Gtk.Label()
         note_label.set_markup(
             "<small>Note: Response must include coordinates in format: x1,y1,x2,y2</small>"
         )
         note_label.set_halign(Gtk.Align.START)
-        prompt_box.append(note_label)
+        note_label.set_margin_top(4)
+        prompt_section.append(note_label)
 
-        # Add buttons
-        button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        vbox.append(prompt_section)
+
+        # Add buttons with improved styling
+        button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
+        button_box.set_halign(Gtk.Align.END)
+        button_box.set_margin_top(8)
+
+        # Add explanatory text on the left side of the button box
+        help_text = Gtk.Label()
+        help_text.set_markup(
+            "<small>Left click: Set preview point (blue circle)\nCtrl+Left click: Set magnification point (green circle)</small>"
+        )
+        help_text.set_halign(Gtk.Align.START)
+        help_text.set_hexpand(True)
+        button_box.append(help_text)
+
+        # Create styled buttons
         rerun_button = Gtk.Button(label="Rerun Detection")
         rerun_button.connect("clicked", self.rerun_detection)
+        rerun_button.set_margin_end(8)
+
         apply_button = Gtk.Button(label="Apply Changes")
         apply_button.connect("clicked", self.apply_manual_changes)
+        apply_button.add_css_class("suggested-action")  # Highlight this button
+
         button_box.append(rerun_button)
         button_box.append(apply_button)
 
-        # Layout
-        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
-        vbox.append(overlay)
-        vbox.append(prompt_box)
         vbox.append(button_box)
+
+        # Add CSS styling
+        css_provider = Gtk.CssProvider()
+        css_provider.load_from_data(
+            b"""
+            .heading {
+                font-weight: bold;
+                font-size: 15px;
+            }
+            """
+        )
+
+        # Apply the CSS provider
+        display = Gdk.Display.get_default()
+        Gtk.StyleContext.add_provider_for_display(
+            display, css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+        )
+
         manual_window.set_child(vbox)
 
         # Show the window
