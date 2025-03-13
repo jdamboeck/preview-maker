@@ -73,11 +73,11 @@ class KimonoAnalyzer(Gtk.Application):
 
     def on_activate(self, app):
         """Initialize the application window and UI components."""
-        # Create the main window
+        # Create the main window with updated title
         self.window = Gtk.ApplicationWindow(
-            application=app, title="Kimono Textile Analyzer"
+            application=app, title="Kimono Textile Analyzer - Dropper"
         )
-        self.window.set_default_size(200, 200)
+        self.window.set_default_size(400, 300)  # Better default size
 
         # Check if Gemini AI is available and show notification if not
         if not GENAI_AVAILABLE:
@@ -90,25 +90,60 @@ class KimonoAnalyzer(Gtk.Application):
         vbox.set_margin_bottom(10)
         vbox.set_margin_start(10)
         vbox.set_margin_end(10)
+        vbox.set_vexpand(True)
         self.window.set_child(vbox)
 
         # Create a horizontal box for the drop areas
         drop_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=20)
+        drop_box.set_vexpand(True)
+        drop_box.set_hexpand(True)
 
         # Automatic mode drop area
         auto_drop_area = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
-        auto_drop_area.set_size_request(120, 120)
+        auto_drop_area.set_size_request(150, 150)
+        auto_drop_area.set_hexpand(True)
+        auto_drop_area.set_vexpand(True)
+        auto_drop_area.set_halign(Gtk.Align.CENTER)
+        auto_drop_area.set_valign(Gtk.Align.CENTER)
+
+        # Center the icon in the auto drop area
+        auto_icon_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        auto_icon_box.set_halign(Gtk.Align.CENTER)
+        auto_icon_box.set_valign(Gtk.Align.CENTER)
+        auto_icon_box.set_vexpand(True)
+
         auto_icon = Gtk.Image.new_from_icon_name("media-playback-start")
-        auto_icon.set_pixel_size(32)
-        auto_drop_area.append(auto_icon)
+        auto_icon.set_pixel_size(48)  # Larger icon
+        auto_label = Gtk.Label(label="Auto Mode")
+        auto_label.set_margin_top(10)
+
+        auto_icon_box.append(auto_icon)
+        auto_icon_box.append(auto_label)
+        auto_drop_area.append(auto_icon_box)
         drop_box.append(auto_drop_area)
 
         # Manual mode drop area
         manual_drop_area = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
-        manual_drop_area.set_size_request(120, 120)
+        manual_drop_area.set_size_request(150, 150)
+        manual_drop_area.set_hexpand(True)
+        manual_drop_area.set_vexpand(True)
+        manual_drop_area.set_halign(Gtk.Align.CENTER)
+        manual_drop_area.set_valign(Gtk.Align.CENTER)
+
+        # Center the icon in the manual drop area
+        manual_icon_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        manual_icon_box.set_halign(Gtk.Align.CENTER)
+        manual_icon_box.set_valign(Gtk.Align.CENTER)
+        manual_icon_box.set_vexpand(True)
+
         manual_icon = Gtk.Image.new_from_icon_name("preferences-system")
-        manual_icon.set_pixel_size(32)
-        manual_drop_area.append(manual_icon)
+        manual_icon.set_pixel_size(48)  # Larger icon
+        manual_label = Gtk.Label(label="Manual Mode")
+        manual_label.set_margin_top(10)
+
+        manual_icon_box.append(manual_icon)
+        manual_icon_box.append(manual_label)
+        manual_drop_area.append(manual_icon_box)
         drop_box.append(manual_drop_area)
 
         # Add background color styling
@@ -117,7 +152,11 @@ class KimonoAnalyzer(Gtk.Application):
             b"""
         box {
             background-color: #333333;
-            border-radius: 5px;
+            border-radius: 8px;
+        }
+        .mode-label {
+            color: white;
+            font-weight: bold;
         }
         """
         )
@@ -130,6 +169,10 @@ class KimonoAnalyzer(Gtk.Application):
             Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
         )
 
+        # Add CSS classes
+        auto_label.add_css_class("mode-label")
+        manual_label.add_css_class("mode-label")
+
         # Set up drag and drop functionality for automatic mode
         auto_drop_target = Gtk.DropTarget.new(Gio.File, Gdk.DragAction.COPY)
         auto_drop_target.connect("drop", self.on_auto_drop)
@@ -140,14 +183,8 @@ class KimonoAnalyzer(Gtk.Application):
         manual_drop_target.connect("drop", self.on_manual_drop)
         manual_drop_area.add_controller(manual_drop_target)
 
-        # Center the drop area
-        center_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
-        center_box.set_hexpand(True)
-        center_box.set_vexpand(True)
-        center_box.set_halign(Gtk.Align.CENTER)
-        center_box.set_valign(Gtk.Align.CENTER)
-        center_box.append(drop_box)
-        vbox.append(center_box)
+        # Add the drop box directly to the main vbox
+        vbox.append(drop_box)
 
         # Create notification label (hidden by default)
         self.notification = Gtk.Label(label="")
@@ -256,8 +293,8 @@ class KimonoAnalyzer(Gtk.Application):
             window_width = int(img_width * scale_factor)
             window_height = int(img_height * scale_factor)
 
-        # Create a new window for manual mode with dimensions matching the image
-        manual_window = Gtk.Window(title="Manual Mode")
+        # Create a new window for manual mode with the updated title format
+        manual_window = Gtk.Window(title="Kimono Textile Analyzer - Manual")
         manual_window.set_default_size(window_width, window_height)
 
         # Initialize normalized points to offscreen
