@@ -64,6 +64,10 @@ def identify_interesting_textile(image, custom_prompt=None):
     if not AI_ENABLED:
         # If AI is not enabled, just return a default region in the center
         width, height = image.size
+        # Quieter logging - only log this once per session if possible
+        if not hasattr(identify_interesting_textile, "logged_fallback"):
+            print("Gemini AI not enabled. Using fallback detection (center region).")
+            identify_interesting_textile.logged_fallback = True
         center_box = (width // 4, height // 4, width * 3 // 4, height * 3 // 4)
         return center_box, None, None  # No raw box or description in fallback mode
 

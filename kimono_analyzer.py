@@ -7,9 +7,15 @@ using Google Gemini AI and creates a zoomed-in circular overlay.
 import os
 import sys
 import threading
+import time
+import subprocess
+import gi
 
 # GTK imports first
-import gi
+gi.require_version("Gtk", "4.0")
+gi.require_version("Gdk", "4.0")
+gi.require_version("Notify", "0.7")  # Add Notify requirement
+from gi.repository import Gtk, Gdk, GdkPixbuf, GLib, Gio, Notify
 
 # Image processing imports
 from PIL import Image
@@ -17,10 +23,6 @@ from PIL import Image
 # Import our custom modules
 import gemini_analyzer
 import image_processor
-
-gi.require_version("Gtk", "4.0")
-gi.require_version("Gdk", "4.0")
-from gi.repository import Gtk, Gdk, GdkPixbuf, GLib, Gio
 
 # Check for optional dependencies
 try:
@@ -77,13 +79,24 @@ class KimonoAnalyzer(Gtk.Application):
             flags=0,
         )
         self.connect("activate", self.on_activate)
+
+        # Register application actions
+        show_action = Gio.SimpleAction.new("show-main-window", None)
+        show_action.connect("activate", self._show_main_window)
+        self.add_action(show_action)
+
+        # Initialize libnotify
+        Notify.init("Kimono Textile Analyzer")
+
         self.current_image = None
         self.processed_image = None
         self.processing = False
         self.image_queue = []
         self.current_image_path = None
         self.current_dir = None
-        self.notification = None
+        self.notification = None  # Will hold the current libnotify notification
+        # For tracking active notifications
+        self.last_notification_id = None
         # Store normalized coordinates (0-1) instead of pixels
         self.selected_magnification_point_norm = None
         self.selected_preview_point_norm = None
@@ -105,19 +118,25 @@ class KimonoAnalyzer(Gtk.Application):
         # Store the description from Gemini
         self.gemini_description = None
 
+        # Ensure desktop file exists for proper notifications
+        self._ensure_desktop_file()
+
     def on_activate(self, app):
         """Initialize the application window and UI components."""
         # Create the main window with updated title
         self.window = Gtk.ApplicationWindow(
             application=app, title="Kimono Textile Analyzer - Dropper"
         )
-        # Set a minimum size but let it grow to fit content
-        self.window.set_size_request(350, 300)
+
+        # Measure content first, then fix the window size
+        self.window.set_resizable(False)
 
         # Check if Gemini AI is available and show notification if not
         if not GENAI_AVAILABLE:
-            # Schedule notification to show after window is displayed
-            GLib.timeout_add(1000, self._show_ai_installation_instructions)
+            # Don't show initial notification, but keep the code for setting up
+            print("Google Generative AI not available - not showing notification")
+            # Don't schedule notification to show after window is displayed
+            # GLib.timeout_add(1000, self._show_ai_installation_instructions)
 
         # Create a vertical box for the layout
         vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
@@ -132,8 +151,8 @@ class KimonoAnalyzer(Gtk.Application):
         drop_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=20)
         drop_box.set_vexpand(True)
         drop_box.set_hexpand(True)
-        # Set minimum size for drop box to ensure usable area
-        drop_box.set_size_request(320, 200)
+        # Set fixed size for drop box
+        drop_box.set_size_request(350, 250)
 
         # Automatic mode drop area
         auto_drop_area = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
@@ -223,51 +242,218 @@ class KimonoAnalyzer(Gtk.Application):
         # Add the drop box directly to the main vbox
         vbox.append(drop_box)
 
-        # Create notification label (hidden by default)
-        self.notification = Gtk.Label(label="")
-        self.notification.set_visible(False)
-        self.notification.add_css_class("notification")
-        vbox.append(self.notification)
+        # Add a status bar for fallback notifications
+        self.status_bar = Gtk.Label()
+        self.status_bar.set_halign(Gtk.Align.START)
+        self.status_bar.set_margin_start(10)
+        self.status_bar.set_margin_top(5)
+        self.status_bar.set_margin_bottom(5)
+        vbox.append(self.status_bar)
 
-        # Notification styling
-        notification_css = Gtk.CssProvider()
-        notification_css.load_from_data(
-            b"""
-        .notification {
-            background-color: rgba(0, 0, 0, 0.7);
-            color: white;
-            padding: 8px;
-            border-radius: 4px;
-        }
-        """
-        )
-        Gtk.StyleContext.add_provider_for_display(
-            display,
-            notification_css,
-            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
-        )
-
-        # Create a hidden progress bar
-        self.progress_bar = Gtk.ProgressBar()
-        self.progress_bar.set_visible(False)
-        vbox.append(self.progress_bar)
-
-        # Show the window
+        # Show the window and fix its size based on content
         self.window.present()
 
-    def show_notification(self, message, timeout=3):
-        """Show a notification message."""
-        if self.notification:
-            self.notification.set_text(message)
-            self.notification.set_visible(True)
+        # Force size calculation
+        GLib.timeout_add(100, self._fix_window_size)
 
-        # Hide notification after timeout
-        GLib.timeout_add_seconds(timeout, self._hide_notification)
+    def _fix_window_size(self):
+        """Fix the window size after initial layout."""
+        if not self.window:
+            return False
+
+        # Get the preferred size based on content
+        width, height = self.window.get_default_size()
+        if width == 0 or height == 0:
+            # Get natural size if default size isn't set
+            width = max(350, self.window.get_width())
+            height = max(300, self.window.get_height())
+
+        # Fix the window size
+        self.window.set_default_size(width, height)
+        self.window.set_resizable(False)
+        return False  # Don't repeat
+
+    def _ensure_desktop_file(self):
+        """Create a desktop file to ensure notifications work properly."""
+        try:
+            # Create desktop file in ~/.local/share/applications
+            app_id = self.get_application_id() + ".desktop"
+            user_app_dir = os.path.expanduser("~/.local/share/applications")
+            os.makedirs(user_app_dir, exist_ok=True)
+            desktop_file_path = os.path.join(user_app_dir, app_id)
+
+            # Only create if it doesn't exist
+            if not os.path.exists(desktop_file_path):
+                with open(desktop_file_path, "w") as f:
+                    f.write(
+                        f"""[Desktop Entry]
+Name=Kimono Textile Analyzer
+Comment=Analyze textile patterns in kimono images
+Exec=python {os.path.abspath(sys.argv[0])}
+Icon=image-x-generic
+Terminal=false
+Type=Application
+Categories=Graphics;
+StartupNotify=true
+X-GNOME-UsesNotifications=true
+"""
+                    )
+                # Update desktop database
+                try:
+                    subprocess.run(
+                        ["update-desktop-database", user_app_dir], check=False
+                    )
+                except FileNotFoundError:
+                    pass  # Not critical if update-desktop-database is not available
+                print(f"Created desktop file at {desktop_file_path}")
+        except Exception as e:
+            print(f"Warning: Could not create desktop file: {e}")
+
+    def show_notification(
+        self, message, timeout=3, use_desktop_notification=False, file_path=None
+    ):
+        """
+        Show a notification to the user.
+
+        Args:
+            message: The message to show
+            timeout: How long to show the message (in seconds)
+            use_desktop_notification: Whether to show a desktop notification (only for important events)
+            file_path: Optional path to the file that should be opened when the notification is clicked
+
+        Returns:
+            True if notification was shown, False otherwise
+        """
+        print(f"Notification: {message}")
+
+        # Always update the status bar regardless of notification type
+        self._update_status_bar(message)
+
+        # Clear status bar after timeout
+        if timeout > 0:
+            GLib.timeout_add_seconds(timeout, self._clear_status_bar)
+
+        # Only proceed with desktop notification if explicitly requested
+        if use_desktop_notification:
+            try:
+                # Avoid sending duplicate or rapid notifications
+                if (
+                    hasattr(self, "_last_notification_message")
+                    and message == self._last_notification_message
+                ):
+                    # If the same message is sent within 1 second, skip it
+                    current_time = time.time()
+                    if (
+                        hasattr(self, "_last_notification_time")
+                        and (current_time - self._last_notification_time) < 1
+                    ):
+                        return False
+
+                self._last_notification_message = message
+                self._last_notification_time = time.time()
+
+                # If we already have a notification, close it first
+                if self.notification is not None:
+                    try:
+                        self.notification.close()
+                    except Exception:
+                        pass
+
+                # Choose appropriate icon based on context
+                icon = "image-x-generic"  # Default image icon
+                if "error" in message.lower():
+                    icon = "dialog-error"
+                elif "complete" in message.lower():
+                    icon = "dialog-information"
+
+                # Create a new notification
+                self.notification = Notify.Notification.new(
+                    "Kimono Textile Analyzer", message, icon
+                )
+
+                # Set timeout (in milliseconds)
+                if timeout > 0:
+                    self.notification.set_timeout(timeout * 1000)
+
+                # If a file path is provided, add an action to open the file
+                if file_path and os.path.exists(file_path):
+                    # Make file path absolute to ensure it can be opened from notification
+                    file_path = os.path.abspath(file_path)
+
+                    # Add an action to open the file
+                    self.notification.add_action(
+                        "open-file",  # Action ID
+                        "Open Image",  # Button text
+                        self._open_file_from_notification,  # Callback
+                        file_path,  # User data passed to callback
+                    )
+
+                # Show the notification
+                print(f"Sending desktop notification: {message}")
+                if file_path:
+                    print(f"Notification includes file path: {file_path}")
+                self.notification.show()
+
+                return True
+            except Exception as e:
+                print(f"Error showing notification: {e}")
+                return False
+
+        return True
+
+    def _open_file_from_notification(self, notification, action, file_path):
+        """Open a file when a notification action is clicked."""
+        print(f"Opening file: {file_path}")
+        try:
+            # Check if file exists before attempting to open
+            if not os.path.exists(file_path):
+                print(f"File not found: {file_path}")
+                self.show_notification(
+                    f"File not found: {os.path.basename(file_path)}", 3
+                )
+                return False
+
+            # Use the correct way to open files based on platform
+            if os.name == "nt":  # Windows
+                os.startfile(file_path)
+            elif os.name == "posix":  # Linux/macOS
+                # Use subprocess.run instead of Popen to wait for command to complete
+                # This helps with error detection
+                result = subprocess.run(["xdg-open", file_path], check=False)
+                if result.returncode != 0:
+                    print(f"Error opening file: xdg-open returned {result.returncode}")
+                    self.show_notification(
+                        f"Error opening file: {os.path.basename(file_path)}", 3
+                    )
+        except Exception as e:
+            print(f"Error opening file: {e}")
+            self.show_notification(f"Error opening file: {e}", 3)
+        return True
+
+    def _update_status_bar(self, message):
+        """Update the status bar with a message."""
+        if hasattr(self, "status_bar") and self.status_bar:
+            self.status_bar.set_text(message)
+        return False
+
+    def _clear_status_bar(self):
+        """Clear the status bar."""
+        if hasattr(self, "status_bar") and self.status_bar:
+            self.status_bar.set_text("")
+        return False
+
+    def _withdraw_notification(self, notification_id):
+        """No longer needed with libnotify approach."""
+        return False
 
     def _hide_notification(self):
-        """Hide the notification."""
-        if self.notification:
-            self.notification.set_visible(False)
+        """Hide notification - kept for compatibility."""
+        if self.notification is not None:
+            try:
+                self.notification.close()
+                self.notification = None
+            except Exception as e:
+                print(f"Error hiding notification: {e}")
         return False  # Don't repeat
 
     def on_auto_drop(self, drop_target, value, x, y):
@@ -1025,10 +1211,15 @@ class KimonoAnalyzer(Gtk.Application):
 
             # Show notification about AI status
             if not gemini_analyzer.AI_ENABLED:
-                self.show_notification(
-                    "Using fallback mode (no Gemini AI). Install google-generativeai package for AI features.",
-                    5,
+                # Don't show a notification, just log to console
+                print(
+                    "Using fallback mode (no Gemini AI). Install google-generativeai package for AI features."
                 )
+                # Remove or comment out the notification
+                # self.show_notification(
+                #     "Using fallback mode (no Gemini AI). Install google-generativeai package for AI features.",
+                #     5,
+                # )
 
             # Get image dimensions
             img_width, img_height = self.current_image.size
@@ -1138,7 +1329,7 @@ class KimonoAnalyzer(Gtk.Application):
             else:
                 print("Warning: No circle_area reference found for redrawing")
 
-            self.show_notification("Detection complete.")
+            self.show_notification("Detection complete.", 3, True)
 
     def apply_manual_changes(self, button):
         """Apply changes from manual mode."""
@@ -1175,7 +1366,9 @@ class KimonoAnalyzer(Gtk.Application):
 
     def _show_error(self, error_message):
         """Show an error message notification."""
-        self.show_notification(f"Error: {error_message}")
+        self.show_notification(
+            f"Error: {error_message}", 5, True
+        )  # Use desktop notification for errors
         self.processing = False
 
         # Continue with next image despite error
@@ -1189,9 +1382,8 @@ class KimonoAnalyzer(Gtk.Application):
 
     def _show_ai_installation_instructions(self):
         """Show instructions for installing the google-generativeai package."""
-        self.show_notification(
-            "To enable AI features, run: pip install google-generativeai", 10
-        )
+        # Instead of showing a notification, just log to console
+        print("To enable AI features, run: pip install google-generativeai")
         return False  # Don't repeat
 
     def on_debug_toggled(self, checkbox):
@@ -1613,11 +1805,16 @@ class KimonoAnalyzer(Gtk.Application):
 
                 # Show notification about AI status
                 if not gemini_analyzer.AI_ENABLED:
-                    GLib.idle_add(
-                        self.show_notification,
-                        "Using fallback mode (no Gemini AI). Install google-generativeai package for AI features.",
-                        5,
+                    # Remove desktop notification but keep console logging
+                    print(
+                        "Using fallback mode (no Gemini AI). Install google-generativeai package for AI features."
                     )
+                    # Comment out or remove the notification
+                    # GLib.idle_add(
+                    #     self.show_notification,
+                    #     "Using fallback mode (no Gemini AI). Install google-generativeai package for AI features.",
+                    #     5,
+                    # )
 
             # Save debug image with red dot at the interesting spot
             debug_path = image_processor.save_debug_image(
@@ -1638,6 +1835,24 @@ class KimonoAnalyzer(Gtk.Application):
             )
             print(f"Processed image saved to: {output_path}")
 
+            # Show completion notification with desktop notification and file path for opening
+            if output_path:  # Add a check to ensure output_path is not None
+                filename = os.path.basename(output_path)
+                GLib.idle_add(
+                    self.show_notification,
+                    f"Image processing complete: {filename}",
+                    3,
+                    True,  # Use desktop notification for completion
+                    output_path,  # Pass the file path for opening
+                )
+            else:
+                GLib.idle_add(
+                    self.show_notification,
+                    "Image processing complete",
+                    3,
+                    True,  # Use desktop notification for completion
+                )
+
             # Update the UI on the main thread
             GLib.idle_add(self._processing_complete)
 
@@ -1649,19 +1864,18 @@ class KimonoAnalyzer(Gtk.Application):
         # Reset processing state
         self.processing = False
 
-        # Update progress bar
+        # Update progress notification
         if self.image_queue:
             total = len(self.image_queue) + 1  # +1 for the current image
             progress = 1 - (len(self.image_queue) / total)
-            if self.progress_bar:
-                self.progress_bar.set_fraction(progress)
+            percent = int(progress * 100)
+            self.show_notification(f"Processing images: {percent}% complete")
 
             # Process the next image
             self.process_next_image()
         else:
-            if self.progress_bar:
-                self.progress_bar.set_visible(False)
-            self.show_notification("All images processed")
+            # Don't include file path here since it's a summary notification
+            self.show_notification("All images processed", 3, True)
 
         if self.spinner:
             self.spinner.stop()
@@ -1670,9 +1884,9 @@ class KimonoAnalyzer(Gtk.Application):
     def process_next_image(self):
         """Process the next image in the queue."""
         if not self.image_queue:
-            self.show_notification("All images processed")
-            if self.progress_bar:
-                self.progress_bar.set_visible(False)
+            self.show_notification(
+                "All images processed", 3, True
+            )  # Use desktop notification for completion
             return
 
         # Get the next image path
@@ -1680,11 +1894,11 @@ class KimonoAnalyzer(Gtk.Application):
         self.current_image_path = image_path
         self.process_image(image_path)
 
-        # Update progress bar
+        # Show progress through notifications instead of progress bar
         total = len(self.image_queue) + 1  # +1 for the current image
         progress = 1 - (len(self.image_queue) / total)
-        if self.progress_bar:
-            self.progress_bar.set_fraction(progress)
+        percent = int(progress * 100)
+        self.show_notification(f"Processing images: {percent}% complete")
 
     def process_dropped_file(self, file):
         """Process a dropped file or directory."""
@@ -1741,6 +1955,21 @@ class KimonoAnalyzer(Gtk.Application):
 
         self.show_notification("The file is not an image")
         return False
+
+    def _show_main_window(self, action, parameter):
+        """Action to show the main window when notification is clicked."""
+        if self.window:
+            self.window.present()
+        return False
+
+    def do_shutdown(self):
+        """Clean up resources when the application is shutting down."""
+        # Uninitialize libnotify
+        if Notify.is_initted():
+            Notify.uninit()
+
+        # Chain up to parent - with self parameter
+        Gtk.Application.do_shutdown(self)
 
 
 def main():
