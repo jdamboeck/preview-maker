@@ -7,6 +7,9 @@ import os
 import re
 from io import BytesIO
 
+# Import configuration
+import config
+
 # Try to import Google Generative AI
 try:
     import google.generativeai as genai
@@ -19,18 +22,16 @@ except ImportError:
         "Run 'pip install google-generativeai' to enable AI features."
     )
 
-# Load Gemini API key from environment variable
+# Load Gemini API key from environment variable with help from config module
+config.load_environment_variables()
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-if not GEMINI_API_KEY:
-    # Try to load from .env file
-    try:
-        with open(".env", "r", encoding="utf-8") as f:
-            for line in f:
-                if line.startswith("GEMINI_API_KEY="):
-                    GEMINI_API_KEY = line.strip().split("=")[1].strip()
-                    break
-    except FileNotFoundError:
-        pass
+
+# Get Gemini API configuration from config
+GEMINI_MODEL = config.get_gemini_api("model_name")
+MAX_OUTPUT_TOKENS = config.get_gemini_api("max_output_tokens")
+TEMPERATURE = config.get_gemini_api("temperature")
+TOP_P = config.get_gemini_api("top_p")
+TOP_K = config.get_gemini_api("top_k")
 
 if GENAI_AVAILABLE and GEMINI_API_KEY and GEMINI_API_KEY != "your_gemini_api_key_here":
     # Initialize Gemini
@@ -38,22 +39,37 @@ if GENAI_AVAILABLE and GEMINI_API_KEY and GEMINI_API_KEY != "your_gemini_api_key
     AI_ENABLED = True
 else:
     AI_ENABLED = False
-    if GENAI_AVAILABLE and not GEMINI_API_KEY:
-        print(
-            "WARNING: No Gemini API key found. "
-            "Please set the GEMINI_API_KEY environment variable or add it to a .env file."
-        )
-    elif GENAI_AVAILABLE and GEMINI_API_KEY == "your_gemini_api_key_here":
-        print("WARNING: Please replace the placeholder API key in the .env file.")
+
+# Use only one fallback warning
+_FALLBACK_WARNING_SHOWN = False
 
 
-def identify_interesting_textile(image, custom_prompt=None):
+def fallback_detection(image):
+    """
+    Fallback detection when Gemini API is not available.
+    Returns a region in the center of the image.
+
+    Args:
+        image: PIL Image object
+
+    Returns:
+        tuple: (box, None, None) where box is (x1, y1, x2, y2) coordinates
+    """
+    # If AI is not enabled, just return a default region in the center
+    width, height = image.size
+    # Create a box that covers the center 50% of the image
+    center_box = (width // 4, height // 4, width * 3 // 4, height * 3 // 4)
+    return center_box, None, None  # No raw box or description in fallback mode
+
+
+def identify_interesting_textile(image, custom_prompt=None, target_type=None):
     """
     Use Google Gemini AI to identify the most interesting area of the image.
 
     Args:
         image: PIL Image object
         custom_prompt: Optional custom prompt to use instead of the default
+        target_type: Optional target type to look for (replaces {target_type} in prompt)
 
     Returns:
         tuple: (coordinates, raw_coordinates, description)
@@ -61,15 +77,13 @@ def identify_interesting_textile(image, custom_prompt=None):
             - raw_coordinates: original coordinates before adjustment or None
             - description: text description of what was detected or None
     """
-    if not AI_ENABLED:
-        # If AI is not enabled, just return a default region in the center
-        width, height = image.size
-        # Quieter logging - only log this once per session if possible
-        if not hasattr(identify_interesting_textile, "logged_fallback"):
-            print("Gemini AI not enabled. Using fallback detection (center region).")
-            identify_interesting_textile.logged_fallback = True
-        center_box = (width // 4, height // 4, width * 3 // 4, height * 3 // 4)
-        return center_box, None, None  # No raw box or description in fallback mode
+    global _FALLBACK_WARNING_SHOWN
+
+    if not GENAI_AVAILABLE or not AI_ENABLED:
+        if not _FALLBACK_WARNING_SHOWN:
+            print("Gemini API not available, using fallback detection")
+            _FALLBACK_WARNING_SHOWN = True
+        return fallback_detection(image)
 
     try:
         # Resize image if too large to avoid API limits
@@ -90,30 +104,26 @@ def identify_interesting_textile(image, custom_prompt=None):
         resized_img.save(buffer, format="JPEG", quality=95)
         buffer.seek(0)
 
-        # Configure the model - update to use the newer recommended model
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        # Configure the model using settings from config
+        model = genai.GenerativeModel(GEMINI_MODEL)
 
-        # Use custom prompt if provided, otherwise use default
+        # Use custom prompt if provided, otherwise use combined prompt from config
         if custom_prompt is None:
-            prompt = (
-                "Please analyze this image and identify ONE SPECIFIC object or feature. "
-                "Find a SINGLE, DISTINCT element that is clearly defined and separate. "
-                "Create a tight bounding box ONLY around this specific element "
-                "(5-15% of image area).\n\n"
-                "Respond with TWO PARTS:\n"
-                "1. Coordinates as normalized values between 0 and 1: x1,y1,x2,y2 where "
-                "(x1,y1) is the top-left corner and (x2,y2) is the bottom-right corner.\n"
-                "2. A brief description (1-2 sentences) of what you identified and why it's interesting or visually notable.\n\n"
-                "Format your response as:\n"
-                "COORDS: x1,y1,x2,y2\n"
-                "DESCRIPTION: Your description here."
-            )
+            # Use the new combined prompt system
+            prompt = config.get_combined_prompt(target_type)
+            print(f"Using prompt with target type: {target_type or 'None'}")
         else:
             prompt = custom_prompt
             print(f"Using custom prompt: {prompt}")
 
         response = model.generate_content(
-            [prompt, {"mime_type": "image/jpeg", "data": buffer.getvalue()}]
+            [prompt, {"mime_type": "image/jpeg", "data": buffer.getvalue()}],
+            generation_config=genai.GenerationConfig(
+                max_output_tokens=MAX_OUTPUT_TOKENS,
+                temperature=TEMPERATURE,
+                top_p=TOP_P,
+                top_k=TOP_K,
+            ),
         )
 
         # Parse the response

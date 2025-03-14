@@ -20,6 +20,7 @@ from PIL import Image
 # Import our custom modules
 import gemini_analyzer
 import image_processor
+import config
 
 # Check for optional dependencies
 try:
@@ -37,36 +38,16 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Gdk", "4.0")
 gi.require_version("Notify", "0.7")
 
-# Create previews directory if it doesn't exist
-PREVIEWS_DIR = "previews"
-DEBUG_DIR = os.path.join(PREVIEWS_DIR, "debug")
-PROMPTS_DIR = "prompts"
-DEFAULT_PROMPT_FILE = os.path.join(PROMPTS_DIR, "gemini_detection.txt")
-DEFAULT_TARGET_TYPE = "textile pattern or detail"
+# Get paths from config
+PREVIEWS_DIR = config.get_path("previews_dir")
+DEBUG_DIR = config.get_path("debug_dir")
+PROMPTS_DIR = config.get_path("prompts_dir")
+DEFAULT_PROMPT_FILE = config.get_path("default_prompt_file")
+TECHNICAL_PROMPT_FILE = config.get_path("technical_prompt_file")
+DEFAULT_TARGET_TYPE = config.get_default_target_type()
 
-os.makedirs(PREVIEWS_DIR, exist_ok=True)
-os.makedirs(DEBUG_DIR, exist_ok=True)
-os.makedirs(PROMPTS_DIR, exist_ok=True)
-
-# Create default prompt file if it doesn't exist
-if not os.path.exists(DEFAULT_PROMPT_FILE):
-    with open(DEFAULT_PROMPT_FILE, "w", encoding="utf-8") as f:
-        f.write(
-            "Please analyze this image and identify the most interesting {target_type} area.\n\n"
-            "Look for areas with these characteristics:\n"
-            "- Clear visual focal points or points of interest\n"
-            "- Detailed patterns or textures\n"
-            "- Areas with high contrast or distinctive colors\n"
-            "- Unusual or unique elements\n"
-            "- Rich details that would benefit from magnification\n\n"
-            "Respond with TWO PARTS:\n"
-            "1. COORDS: Coordinates as normalized values between 0 and 1 in the format x1,y1,x2,y2\n"
-            "   where (x1,y1) is the top-left corner and (x2,y2) is the bottom-right corner.\n"
-            "2. DESCRIPTION: A brief description (1-2 sentences) of what you identified and why it's interesting.\n\n"
-            "Format your response EXACTLY as:\n"
-            "COORDS: x1,y1,x2,y2\n"
-            "DESCRIPTION: Your description here."
-        )
+# Ensure prompt files exist
+config.ensure_prompt_files()
 
 
 class KimonoAnalyzer(Gtk.Application):
@@ -522,7 +503,7 @@ X-GNOME-UsesNotifications=true
         # Make the window automatically fit content with a reasonable max size
         if img_width > max_width or img_height > max_height:
             # Set a maximum size that fits on screen
-        manual_window.set_default_size(window_width, window_height)
+            manual_window.set_default_size(window_width, window_height)
         else:
             # Let it size to content naturally, with a minimum reasonable size
             manual_window.set_size_request(
@@ -1145,191 +1126,100 @@ X-GNOME-UsesNotifications=true
         return (x1, y1, x2, y2)
 
     def rerun_detection(self, button):
-        """Rerun Gemini detection."""
+        """Rerun the detection process with the current settings."""
+        if not self.current_image:
+            self.show_notification("No image loaded")
+            return
+
         self.show_notification("Rerunning detection...")
-        if self.spinner:
-            self.spinner.start()
 
-        # Make sure we have an image and it's in RGB mode if it's RGBA
-        if self.current_image:
-            # Store the original mode to restore it later
-            original_mode = self.current_image.mode
+        # Format the prompt with the target type
+        target_type = DEFAULT_TARGET_TYPE
 
-            # Create a copy for Gemini processing that may need to be RGB
-            image_for_gemini = self.current_image.copy()
-            if image_for_gemini.mode == "RGBA":
-                image_for_gemini = image_for_gemini.convert("RGB")
+        # Use the target type from the entry if available
+        if hasattr(self, "target_entry") and self.target_entry:
+            target_text = self.target_entry.get_text()
+            if target_text.strip():
+                target_type = target_text
 
-            # Get the target type
-            target_type = DEFAULT_TARGET_TYPE
-            if hasattr(self, "target_entry") and self.target_entry:
-                target_text = self.target_entry.get_text()
-                if target_text.strip():
-                    target_type = target_text.strip()
+        print(f"Formatted prompt with target type: {target_type}")
 
-            # Format the prompt template with the target type
-            try:
-                formatted_prompt = self.default_prompt.format(target_type=target_type)
-                print(f"Formatted prompt with target type: {target_type}")
-                print(f"Using prompt: {formatted_prompt}")
-            except KeyError:
-                # If formatting fails, use the template as is
-                formatted_prompt = self.default_prompt
-                print(
-                    "Warning: Prompt template doesn't contain {target_type} placeholder"
-                )
+        # Create a thread for the detection to avoid blocking the UI
+        detection_thread = threading.Thread(
+            target=self._run_detection_thread,
+            args=(self.current_image, target_type),
+        )
+        detection_thread.daemon = True
+        detection_thread.start()
 
-            # Call the Gemini analyzer with the custom prompt
+    def _run_detection_thread(self, image, target_type):
+        """Run the detection in a separate thread."""
+        try:
+            # Get the custom prompt if it exists
+            custom_prompt = None
+            if hasattr(self, "custom_prompt") and self.custom_prompt:
+                custom_prompt = self.custom_prompt
+                # Replace {target_type} with the actual value
+                custom_prompt = custom_prompt.replace("{target_type}", target_type)
+
+            # Call the gemini detector with the custom prompt
             interesting_area, raw_box, description = (
                 gemini_analyzer.identify_interesting_textile(
-                    image_for_gemini, custom_prompt=formatted_prompt
+                    image, custom_prompt, target_type
                 )
             )
 
-            # Store the ORIGINAL Gemini API boundary box for debug overlay
-            self.gemini_box = interesting_area
-
-            # Also store the raw unprocessed box for more detailed debugging
-            self.raw_gemini_box = raw_box
-
-            # Store the description from Gemini
-            self.gemini_description = description
-
-            # Update the description label if we have a description
-            if hasattr(self, "description_label") and self.description_label:
-                if description:
-                    self.description_label.set_text(description)
-                    self.description_label.set_tooltip_text(description)
-                else:
-                    self.description_label.set_text("No description available")
-
-            print(f"Gemini API returned boundary box: {self.gemini_box}")
+            # Store the raw boundary from Gemini for debug overlay
             if raw_box:
-                print(f"Raw Gemini box before adjustments: {self.raw_gemini_box}")
+                self.gemini_box = raw_box
+
+            # Update the description in the UI if one was returned
             if description:
-                print(f"Gemini description: {description}")
+                GLib.idle_add(self._update_description_in_ui, description)
 
-            # Show notification about AI status
-            if not gemini_analyzer.AI_ENABLED:
-                # Don't show a notification, just log to console
-                print(
-                    "Using fallback mode (no Gemini AI). Install google-generativeai package for AI features."
-                )
-                # Remove or comment out the notification
-                # self.show_notification(
-                #     "Using fallback mode (no Gemini AI). Install google-generativeai package for AI features.",
-                #     5,
-                # )
+            # Update magnification and preview points based on the interesting area
+            if interesting_area:
+                x1, y1, x2, y2 = interesting_area
+                width, height = image.size
 
-            # Get image dimensions
-            img_width, img_height = self.current_image.size
+                # Set the magnification point to the center of the interesting area
+                mag_x = (x1 + x2) / 2
+                mag_y = (y1 + y2) / 2
 
-            # Calculate the area of the bounding box as a percentage of the image
-            box_width = interesting_area[2] - interesting_area[0]
-            box_height = interesting_area[3] - interesting_area[1]
-            box_area = box_width * box_height
-            image_area = img_width * img_height
-            area_percentage = (box_area / image_area) * 100
+                # Convert to integers at the end of calculation
+                mag_x = int(mag_x)
+                mag_y = int(mag_y)
 
-            print(f"Bounding box area: {area_percentage:.2f}% of image")
+                # Set the normalized coordinates
+                norm_mag_x = mag_x / width
+                norm_mag_y = mag_y / height
+                self.selected_magnification_point_norm = (norm_mag_x, norm_mag_y)
 
-            # Set the magnification point (green circle) at the center of the interesting area
-            # Use floating point division to get the exact center point
-            mag_x = (interesting_area[0] + interesting_area[2]) / 2
-            mag_y = (interesting_area[1] + interesting_area[3]) / 2
+                # Calculate the preview point
+                preview_x = int(width * 0.125)
+                preview_y = int(height * 0.125)
+                norm_preview_x = preview_x / width
+                norm_preview_y = preview_y / height
+                self.selected_preview_point_norm = (norm_preview_x, norm_preview_y)
 
-            # Convert to int after all calculations to prevent accumulated rounding errors
-            mag_x = int(mag_x)
-            mag_y = int(mag_y)
+                print(f"Gemini API returned boundary box: {interesting_area}")
+                print(f"Set magnification point at: ({mag_x}, {mag_y})")
+                print(f"Normalized magnification: ({norm_mag_x}, {norm_mag_y})")
+                print(f"Set preview point at: ({preview_x}, {preview_y})")
+                print(f"Normalized preview: ({norm_preview_x}, {norm_preview_y})")
 
-            # Calculate padding based on current selection size instead of using a fixed value
-            shortest_dimension = min(img_width, img_height)
-            selection_diameter = int(shortest_dimension * self.selection_ratio)
-            mag_radius = (
-                selection_diameter / 2
-            )  # Use the actual radius from selection size
+                # Calculate the area percentage for debugging
+                box_width = x2 - x1
+                box_height = y2 - y1
+                area_percentage = (box_width * box_height) / (width * height) * 100
+                print(f"Bounding box area: {area_percentage:.2f}% of image")
 
-            # Ensure magnification point is not too close to any edge based on its actual size
-            mag_x = max(int(mag_radius), min(img_width - int(mag_radius), mag_x))
-            mag_y = max(int(mag_radius), min(img_height - int(mag_radius), mag_y))
-
-            # Store both pixel coordinates and normalized coordinates
-            self.selected_magnification_point = (mag_x, mag_y)
-
-            # Calculate normalized coordinates (0.0-1.0) for the magnification point
-            norm_mag_x = mag_x / img_width
-            norm_mag_y = mag_y / img_height
-            self.selected_magnification_point_norm = (norm_mag_x, norm_mag_y)
-
-            # For the preview point (blue circle), we need more padding since its radius is larger
-            # Calculate preview circle radius based on the selection size and zoom factor
-            preview_diameter = selection_diameter * self.zoom_factor
-            preview_radius = preview_diameter / 2  # Use floating point division
-
-            # Calculate safe areas for the preview point
-            safe_left = int(preview_radius)
-            safe_right = img_width - int(preview_radius)
-            safe_top = int(preview_radius)
-            safe_bottom = img_height - int(preview_radius)
-
-            # If the image is too small to fit the preview circle, adjust the radius
-            if safe_right <= safe_left or safe_bottom <= safe_top:
-                # Image is too small, use a smaller radius
-                preview_radius = (
-                    min(img_width, img_height) / 3
-                )  # Use floating point division
-                safe_left = int(preview_radius)
-                safe_right = img_width - int(preview_radius)
-                safe_top = int(preview_radius)
-                safe_bottom = img_height - int(preview_radius)
-
-            # Define potential preview points in the four corners within the safe area
-            corners = [
-                (safe_left, safe_top),  # Top-left
-                (safe_right, safe_top),  # Top-right
-                (safe_left, safe_bottom),  # Bottom-left
-                (safe_right, safe_bottom),  # Bottom-right
-            ]
-
-            # Find the corner farthest from the magnification point
-            max_distance = 0
-            farthest_corner = corners[0]
-
-            for corner in corners:
-                corner_x, corner_y = corner
-                # Calculate squared distance (no need for square root)
-                distance = (corner_x - mag_x) ** 2 + (corner_y - mag_y) ** 2
-                if distance > max_distance:
-                    max_distance = distance
-                    farthest_corner = corner
-
-            # Set the preview point (blue circle) in the farthest corner
-            preview_x, preview_y = farthest_corner
-            self.selected_preview_point = (preview_x, preview_y)
-
-            # Calculate normalized coordinates for the preview point
-            norm_preview_x = preview_x / img_width
-            norm_preview_y = preview_y / img_height
-            self.selected_preview_point_norm = (norm_preview_x, norm_preview_y)
-
-            print(f"Image dimensions: {img_width}x{img_height}")
-            print(f"Set magnification point at: {self.selected_magnification_point}")
-            print(f"Normalized magnification: {self.selected_magnification_point_norm}")
-            print(f"Set preview point at: {self.selected_preview_point}")
-            print(f"Normalized preview: {self.selected_preview_point_norm}")
-
-            # Update the UI to show the new points
-            if hasattr(self, "spinner") and self.spinner:
-                self.spinner.stop()
-
-            # Use the stored reference to the circle_area to force a redraw
-            if hasattr(self, "circle_area") and self.circle_area:
-                print("Redrawing circle area")
-                self.circle_area.queue_draw()
-            else:
-                print("Warning: No circle_area reference found for redrawing")
-
-            self.show_notification("Detection complete.", 3, True)
+            # Redraw the circle area
+            GLib.idle_add(lambda: self.circle_area and self.circle_area.queue_draw())
+            GLib.idle_add(self.show_notification, "Detection complete.", 2, True)
+        except Exception as e:
+            print(f"Error in detection thread: {e}")
+            GLib.idle_add(self.show_notification, f"Error in detection: {e}", 5, True)
 
     def apply_manual_changes(self, button):
         """Apply changes from manual mode."""
@@ -1380,11 +1270,48 @@ X-GNOME-UsesNotifications=true
 
         return False  # Important for GLib.idle_add
 
-    def _show_ai_installation_instructions(self):
-        """Show instructions for installing the google-generativeai package."""
-        # Instead of showing a notification, just log to console
-        print("To enable AI features, run: pip install google-generativeai")
-        return False  # Don't repeat
+    def _show_ai_installation_instructions(self, container=None):
+        """Show installation instructions for the AI package."""
+        install_info = Gtk.Label()
+        install_info.set_markup(
+            "<b>Installation Instructions:</b>\n"
+            "1. Install the Gemini API package: <tt>pip install google-generativeai</tt>\n"
+            "2. Set your API key in the environment: <tt>export GEMINI_API_KEY=your_key_here</tt>\n"
+            "   Or create a .env file with: <tt>GEMINI_API_KEY=your_key_here</tt>"
+        )
+        install_info.set_wrap(True)
+        install_info.set_halign(Gtk.Align.START)
+
+        # If container is provided, add to it, otherwise assume it's a standalone dialog
+        if container:
+            container.append(install_info)
+        else:
+            # Create a dialog window
+            dialog = Gtk.Window()
+            dialog.set_title("AI Installation Instructions")
+            dialog.set_resizable(True)
+            dialog.set_size_request(500, 300)
+
+            # Main box
+            main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+            main_box.set_margin_top(20)
+            main_box.set_margin_bottom(20)
+            main_box.set_margin_start(20)
+            main_box.set_margin_end(20)
+            dialog.set_child(main_box)
+
+            # Add the instructions
+            main_box.append(install_info)
+
+            # Close button
+            close_button = Gtk.Button.new_with_label("Close")
+            close_button.set_halign(Gtk.Align.END)
+            close_button.set_margin_top(20)
+            close_button.connect("clicked", lambda button: dialog.destroy())
+            main_box.append(close_button)
+
+            # Show dialog
+            dialog.present()
 
     def on_debug_toggled(self, checkbox):
         """Handle toggling of the debug checkbox."""
@@ -1421,33 +1348,34 @@ X-GNOME-UsesNotifications=true
             self.circle_area.queue_draw()
 
     def reset_prompt_to_default(self, button):
-        """Reset the prompt to the default one from file."""
+        """Reset the prompt to the default template."""
         try:
-            with open(DEFAULT_PROMPT_FILE, "r", encoding="utf-8") as f:
-                default_prompt = f.read()
-                if self.prompt_entry:
-                    self.prompt_entry.get_buffer().set_text(default_prompt)
-            self.show_notification("Prompt reset to default")
-        except FileNotFoundError:
-            self.show_notification("Default prompt file not found")
+            # Load only the user part of the prompt
+            with open(DEFAULT_PROMPT_FILE, "w", encoding="utf-8") as f:
+                f.write(config.DEFAULT_USER_PROMPT)
+
+            if self.prompt_text_view:
+                self.prompt_text_view.get_buffer().set_text(config.DEFAULT_USER_PROMPT)
+            self.show_notification("User prompt reset to default")
+        except Exception as e:
+            self.show_notification(f"Error resetting prompt: {e}")
 
     def save_prompt_as_default(self, button):
         """Save the current prompt as the default one."""
-        if hasattr(self, "prompt_entry") and self.prompt_entry:
-            buffer = self.prompt_entry.get_buffer()
+        if hasattr(self, "prompt_text_view") and self.prompt_text_view:
+            buffer = self.prompt_text_view.get_buffer()
             start_iter = buffer.get_start_iter()
             end_iter = buffer.get_end_iter()
             prompt_text = buffer.get_text(start_iter, end_iter, True)
 
-            if prompt_text.strip():
-                try:
-                    with open(DEFAULT_PROMPT_FILE, "w", encoding="utf-8") as f:
-                        f.write(prompt_text)
-                    self.show_notification("Prompt saved as default")
-                except Exception as e:
-                    self.show_notification(f"Error saving prompt: {e}")
-            else:
-                self.show_notification("Prompt is empty, not saving")
+            # Save only the user part (the instructions, not the COORDS/FORMAT part)
+            try:
+                with open(DEFAULT_PROMPT_FILE, "w", encoding="utf-8") as f:
+                    f.write(prompt_text)
+                self.show_notification("User prompt saved as default")
+            except Exception as e:
+                self.show_notification(f"Error saving prompt: {e}")
+                print(f"Error saving prompt: {e}")
 
     def _update_description_in_ui(self, description):
         """Update the description label in the UI (called from the main thread)."""
@@ -1461,230 +1389,141 @@ X-GNOME-UsesNotifications=true
         # Create a new dialog window
         dialog = Gtk.Window()
         dialog.set_title("Advanced Settings")
-        # Let dialog size to its content automatically but with minimum dimensions
+        dialog.set_resizable(True)
+
+        # Set a minimum size but no fixed size, allowing content-based sizing
         dialog.set_size_request(500, 400)
-        dialog.set_modal(True)  # Makes it a modal dialog
-        dialog.set_transient_for(self.window)  # Set parent window
 
-        # Create a vertical box for all content
-        content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
-        content_box.set_margin_start(16)
-        content_box.set_margin_end(16)
-        content_box.set_margin_top(16)
-        content_box.set_margin_bottom(16)
+        # Main vertical box for all settings
+        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        main_box.set_margin_top(20)
+        main_box.set_margin_bottom(20)
+        main_box.set_margin_start(20)
+        main_box.set_margin_end(20)
+        dialog.set_child(main_box)
 
-        # Create a notebook (tabbed interface)
-        notebook = Gtk.Notebook()
-        notebook.set_vexpand(True)
+        # API Debug checkbox
+        debug_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=5)
+        debug_checkbox = Gtk.CheckButton.new_with_label("Debug Mode")
+        debug_checkbox.set_active(self.debug_mode)
+        debug_checkbox.connect("toggled", self.on_debug_toggled)
+        debug_box.append(debug_checkbox)
+        main_box.append(debug_box)
 
-        # --- API Debug Tab ---
-        api_debug_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        api_debug_box.set_margin_start(12)
-        api_debug_box.set_margin_end(12)
-        api_debug_box.set_margin_top(12)
-        api_debug_box.set_margin_bottom(12)
+        # API Boundary Label
+        api_boundary_label = Gtk.Label()
+        api_boundary_label.set_markup("<b>API Detection Area</b>")
+        api_boundary_label.set_halign(Gtk.Align.START)
+        api_boundary_label.set_margin_top(10)
+        main_box.append(api_boundary_label)
 
-        # Add API debug information
-        api_info_label = Gtk.Label()
-        api_info_label.set_markup("<b>API Information</b>")
-        api_info_label.set_halign(Gtk.Align.START)
-        api_debug_box.append(api_info_label)
-
-        # Add debug checkbox for showing the API boundary
-        debug_checkbox_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-        debug_checkbox_box.set_margin_top(12)
-        debug_checkbox_box.set_margin_bottom(12)
-
-        self.debug_checkbox = Gtk.CheckButton()
-        self.debug_checkbox.set_label("Show API Boundary")
-        self.debug_checkbox.set_tooltip_text(
-            "Show the original boundary box returned by Gemini API"
+        # API Boundary checkbox
+        boundary_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=5)
+        boundary_checkbox = Gtk.CheckButton.new_with_label("Show API boundary box")
+        boundary_checkbox.set_tooltip_text(
+            "Show the raw bounding box returned by Gemini API"
         )
-        self.debug_checkbox.set_active(self.debug_mode)
-        self.debug_checkbox.connect("toggled", self.on_debug_toggled)
-        debug_checkbox_box.append(self.debug_checkbox)
-
-        api_debug_box.append(debug_checkbox_box)
-
-        # Create a frame for the API status
-        api_status_frame = Gtk.Frame()
-        api_status_frame.set_label("API Status")
-
-        api_status_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        api_status_box.set_margin_start(12)
-        api_status_box.set_margin_end(12)
-        api_status_box.set_margin_top(12)
-        api_status_box.set_margin_bottom(12)
-
-        # API availability status
-        api_available_label = Gtk.Label()
-        if GENAI_AVAILABLE:
-            api_available_label.set_markup(
-                "Gemini API Package: <span foreground='green'>Available</span>"
-            )
-        else:
-            api_available_label.set_markup(
-                "Gemini API Package: <span foreground='red'>Not Available</span>"
-            )
-        api_available_label.set_halign(Gtk.Align.START)
-        api_status_box.append(api_available_label)
-
-        # API key status
-        api_key_label = Gtk.Label()
-        if "GEMINI_API_KEY" in os.environ and os.environ["GEMINI_API_KEY"]:
-            api_key_label.set_markup(
-                "API Key: <span foreground='green'>Configured</span>"
-            )
-        else:
-            api_key_label.set_markup(
-                "API Key: <span foreground='red'>Not Configured</span>"
-            )
-        api_key_label.set_halign(Gtk.Align.START)
-        api_status_box.append(api_key_label)
+        boundary_checkbox.set_active(
+            self.debug_mode
+        )  # Use debug mode value for this too
+        boundary_checkbox.connect("toggled", self.on_debug_toggled)
+        boundary_box.append(boundary_checkbox)
+        main_box.append(boundary_box)
 
         # Installation instructions
-        install_info = Gtk.Label()
-        install_info.set_markup(
-            "<b>Installation Instructions:</b>\n"
-            "1. Install the Gemini API package: <tt>pip install google-generativeai</tt>\n"
-            "2. Set your API key in the environment: <tt>export GEMINI_API_KEY=your_key_here</tt>\n"
-            "   Or create a .env file with: <tt>GEMINI_API_KEY=your_key_here</tt>"
-        )
-        install_info.set_wrap(True)
-        install_info.set_halign(Gtk.Align.START)
-        api_status_box.append(install_info)
+        if not GENAI_AVAILABLE:
+            self._show_ai_installation_instructions(main_box)
 
-        api_status_frame.set_child(api_status_box)
-        api_debug_box.append(api_status_frame)
+        # Prompt Editor Section
+        prompt_label = Gtk.Label()
+        prompt_label.set_markup("<b>User Prompt Editor</b>")
+        prompt_label.set_halign(Gtk.Align.START)
+        prompt_label.set_margin_top(20)
+        main_box.append(prompt_label)
 
-        # --- Custom Prompt Tab ---
-        custom_prompt_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        custom_prompt_box.set_margin_start(12)
-        custom_prompt_box.set_margin_end(12)
-        custom_prompt_box.set_margin_top(12)
-        custom_prompt_box.set_margin_bottom(12)
-
-        # Add a description
+        # Prompt description/info
         prompt_info_label = Gtk.Label()
         prompt_info_label.set_markup(
-            "<b>Custom Prompt Editor</b>\n"
-            "Edit the default prompt used for detection. Use {target_type} as a placeholder for the target type."
+            "Edit the user portion of the prompt used for detection. The technical formatting "
+            "instructions are managed separately.\nUse {target_type} as a placeholder for the target type."
         )
         prompt_info_label.set_wrap(True)
         prompt_info_label.set_halign(Gtk.Align.START)
-        custom_prompt_box.append(prompt_info_label)
+        prompt_info_label.set_margin_bottom(10)
+        main_box.append(prompt_info_label)
 
-        # Create a ScrolledWindow for the prompt text editor
+        # Text view with scrollbars for custom prompt
         prompt_scroll = Gtk.ScrolledWindow()
-        prompt_scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
         prompt_scroll.set_vexpand(True)
-        prompt_scroll.set_size_request(-1, 200)  # Set minimum height for text area
+        prompt_scroll.set_min_content_height(200)
 
-        # Add a text view for the prompt
         prompt_text_view = Gtk.TextView()
         prompt_text_view.set_wrap_mode(Gtk.WrapMode.WORD)
-        prompt_text_view.get_style_context().add_class("prompt-text")
-        prompt_text_view.set_top_margin(8)
-        prompt_text_view.set_bottom_margin(8)
-        prompt_text_view.set_left_margin(8)
-        prompt_text_view.set_right_margin(8)
+        prompt_scroll.set_child(prompt_text_view)
+        main_box.append(prompt_scroll)
 
-        # Load the default prompt
+        # Store a reference to the prompt text view
+        self.prompt_text_view = prompt_text_view
+
+        # Load the current user prompt
         try:
             with open(DEFAULT_PROMPT_FILE, "r", encoding="utf-8") as f:
-                default_prompt = f.read()
-                prompt_buffer = prompt_text_view.get_buffer()
-                prompt_buffer.set_text(default_prompt)
+                user_prompt = f.read()
+                prompt_text_view.get_buffer().set_text(user_prompt)
         except FileNotFoundError:
+            # If file doesn't exist, use default from config
             prompt_buffer = prompt_text_view.get_buffer()
-            prompt_buffer.set_text(
-                "Please analyze this image and identify the most interesting {target_type} area.\n\n"
-                "Look for areas with these characteristics:\n"
-                "- Clear visual focal points or points of interest\n"
-                "- Detailed patterns or textures\n"
-                "- Areas with high contrast or distinctive colors\n"
-                "- Unusual or unique elements\n"
-                "- Rich details that would benefit from magnification\n\n"
-                "Respond with TWO PARTS:\n"
-                "1. COORDS: Coordinates as normalized values between 0 and 1 in the format x1,y1,x2,y2\n"
-                "   where (x1,y1) is the top-left corner and (x2,y2) is the bottom-right corner.\n"
-                "2. DESCRIPTION: A brief description (1-2 sentences) of what you identified and why it's interesting.\n\n"
-                "Format your response EXACTLY as:\n"
-                "COORDS: x1,y1,x2,y2\n"
-                "DESCRIPTION: Your description here."
-            )
+            prompt_buffer.set_text(config.DEFAULT_USER_PROMPT)
 
-        prompt_scroll.set_child(prompt_text_view)
-        custom_prompt_box.append(prompt_scroll)
-
-        # Add buttons for the prompt actions
-        prompt_button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        # Button box for prompt controls
+        prompt_button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         prompt_button_box.set_halign(Gtk.Align.END)
+        prompt_button_box.set_margin_top(10)
 
-        save_prompt_button = Gtk.Button.new_with_label("Save As Default")
-        save_prompt_button.connect("clicked", self.save_custom_prompt, prompt_text_view)
-        prompt_button_box.append(save_prompt_button)
+        # Reset prompt button
+        reset_button = Gtk.Button.new_with_label("Reset to Default")
+        reset_button.connect("clicked", self.reset_custom_prompt, prompt_text_view)
+        prompt_button_box.append(reset_button)
 
-        reset_prompt_button = Gtk.Button.new_with_label("Reset to Default")
-        reset_prompt_button.connect(
-            "clicked", self.reset_custom_prompt, prompt_text_view
-        )
-        prompt_button_box.append(reset_prompt_button)
+        # Save prompt button
+        save_button = Gtk.Button.new_with_label("Save Prompt")
+        save_button.connect("clicked", self.save_custom_prompt, prompt_text_view)
+        prompt_button_box.append(save_button)
 
-        custom_prompt_box.append(prompt_button_box)
+        main_box.append(prompt_button_box)
 
-        # Add tabs to the notebook
-        notebook.append_page(api_debug_box, Gtk.Label(label="API Debug"))
-        notebook.append_page(custom_prompt_box, Gtk.Label(label="Custom Prompt"))
-
-        content_box.append(notebook)
-
-        # Add close button
+        # Close button at the bottom
         close_button = Gtk.Button.new_with_label("Close")
         close_button.set_halign(Gtk.Align.END)
-        close_button.connect("clicked", lambda btn: dialog.destroy())
-        content_box.append(close_button)
+        close_button.set_margin_top(20)
+        close_button.connect("clicked", lambda button: dialog.destroy())
+        main_box.append(close_button)
 
-        dialog.set_child(content_box)
+        # Show dialog
         dialog.present()
-
-    def save_custom_prompt(self, button, text_view):
-        """Save the custom prompt as the default."""
-        buffer = text_view.get_buffer()
-        start_iter = buffer.get_start_iter()
-        end_iter = buffer.get_end_iter()
-        prompt_text = buffer.get_text(start_iter, end_iter, False)
-
-        try:
-            os.makedirs(os.path.dirname(DEFAULT_PROMPT_FILE), exist_ok=True)
-            with open(DEFAULT_PROMPT_FILE, "w", encoding="utf-8") as f:
-                f.write(prompt_text)
-            self.show_notification("Custom prompt saved as default", 3)
-        except Exception as e:
-            self.show_notification(f"Error saving prompt: {e}", 3)
 
     def reset_custom_prompt(self, button, text_view):
         """Reset the prompt to the default template."""
-        default_template = (
-            "Please analyze this image and identify the most interesting {target_type} area.\n\n"
-            "Look for areas with these characteristics:\n"
-            "- Clear visual focal points or points of interest\n"
-            "- Detailed patterns or textures\n"
-            "- Areas with high contrast or distinctive colors\n"
-            "- Unusual or unique elements\n"
-            "- Rich details that would benefit from magnification\n\n"
-            "Respond with TWO PARTS:\n"
-            "1. COORDS: Coordinates as normalized values between 0 and 1 in the format x1,y1,x2,y2\n"
-            "   where (x1,y1) is the top-left corner and (x2,y2) is the bottom-right corner.\n"
-            "2. DESCRIPTION: A brief description (1-2 sentences) of what you identified and why it's interesting.\n\n"
-            "Format your response EXACTLY as:\n"
-            "COORDS: x1,y1,x2,y2\n"
-            "DESCRIPTION: Your description here."
-        )
-
         buffer = text_view.get_buffer()
-        buffer.set_text(default_template)
-        self.show_notification("Prompt reset to default template", 3)
+        buffer.set_text(config.DEFAULT_USER_PROMPT)
+        self.show_notification("Prompt reset to default template")
+
+    def save_custom_prompt(self, button, text_view):
+        """Save the custom prompt from the text view."""
+        buffer = text_view.get_buffer()
+        start_iter = buffer.get_start_iter()
+        end_iter = buffer.get_end_iter()
+        prompt_text = buffer.get_text(start_iter, end_iter, True)
+
+        if prompt_text.strip():
+            try:
+                with open(DEFAULT_PROMPT_FILE, "w", encoding="utf-8") as f:
+                    f.write(prompt_text)
+                self.show_notification("Custom prompt saved")
+            except Exception as e:
+                self.show_notification(f"Error saving prompt: {e}")
+        else:
+            self.show_notification("Prompt is empty, not saving")
 
     def process_image(self, image_path):
         """Start processing the image in a separate thread."""
@@ -1731,17 +1570,20 @@ X-GNOME-UsesNotifications=true
 
                 # Calculate the selection box based on current point and settings
                 interesting_area = self._calculate_selection_box()
+
+                # Calculate radius regardless of whether interesting_area exists
+                shortest_dimension = min(width, height)
+                selection_diameter = int(shortest_dimension * self.selection_ratio)
+                radius = selection_diameter / 2
+
                 # If calculation failed, fallback to something reasonable
                 if not interesting_area:
-                    # Calculate a reasonable bounding box
-                    shortest_dimension = min(width, height)
-                    selection_diameter = int(shortest_dimension * self.selection_ratio)
-                    radius = selection_diameter / 2
-                x1 = max(0, mag_x - radius)
-                y1 = max(0, mag_y - radius)
-                x2 = min(width, mag_x + radius)
-                y2 = min(height, mag_y + radius)
-                interesting_area = (x1, y1, x2, y2)
+                    # Use the radius calculated above
+                    x1 = max(0, mag_x - radius)
+                    y1 = max(0, mag_y - radius)
+                    x2 = min(width, mag_x + radius)
+                    y2 = min(height, mag_y + radius)
+                    interesting_area = (x1, y1, x2, y2)
 
                 print(f"Using manually selected area: {interesting_area}")
 
@@ -1805,16 +1647,16 @@ X-GNOME-UsesNotifications=true
 
             # Show notification about AI status
             if not gemini_analyzer.AI_ENABLED:
-                    # Remove desktop notification but keep console logging
-                    print(
-                        "Using fallback mode (no Gemini AI). Install google-generativeai package for AI features."
-                    )
-                    # Comment out or remove the notification
-                    # GLib.idle_add(
-                    #     self.show_notification,
-                    #     "Using fallback mode (no Gemini AI). Install google-generativeai package for AI features.",
-                    #     5,
-                    # )
+                # Remove desktop notification but keep console logging
+                print(
+                    "Using fallback mode (no Gemini AI). Install google-generativeai package for AI features."
+                )
+                # Comment out or remove the notification
+                # GLib.idle_add(
+                #     self.show_notification,
+                #     "Using fallback mode (no Gemini AI). Install google-generativeai package for AI features.",
+                #     5,
+                # )
 
             # Save debug image with red dot at the interesting spot
             debug_path = image_processor.save_debug_image(

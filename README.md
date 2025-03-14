@@ -8,6 +8,7 @@ A GTK-based application for analyzing kimono textiles using Google's Gemini AI A
 - AI-powered detection of interesting textile patterns
 - Creates a circular highlight overlay on the original image
 - Shows a zoomed-in view of the detected interesting part
+- Configurable parameters via TOML configuration file
 
 ## Installation
 
@@ -26,6 +27,33 @@ A GTK-based application for analyzing kimono textiles using Google's Gemini AI A
    export GEMINI_API_KEY=your_api_key_here
    ```
    Or save it in a `.env` file in the project root directory
+
+## Configuration
+
+The application uses a TOML configuration file (`config.toml`) for customizable settings. On first run, a default configuration file will be created if it doesn't exist.
+
+You can customize the following:
+
+- **File and Directory Paths**: Set custom locations for previews, debug images, and prompts
+- **Image Processing Parameters**: Adjust selection ratio, zoom factor, and quality settings
+- **Gemini API Settings**: Configure model name, temperature, and token limits
+- **Detection Settings**: Set default target types and supported file formats
+
+Example configuration:
+
+```toml
+[paths]
+previews_dir = "custom_previews"
+debug_dir = "custom_previews/debug"
+
+[image_processing]
+selection_ratio = 0.15  # 15% of shortest dimension
+zoom_factor = 4.0       # 4x zoom
+
+[gemini_api]
+model_name = "gemini-1.5-pro-vision"
+temperature = 0.2
+```
 
 ## Usage
 

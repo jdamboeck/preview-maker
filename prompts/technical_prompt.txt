@@ -1,0 +1,9 @@
+Respond with TWO PARTS:
+
+1. COORDS: Normalized values between 0 and 1 in the format x1,y1,x2,y2 where (x1,y1) is the top-left corner and (x2,y2) is the bottom-right corner.
+
+2. DESCRIPTION: A brief description (1-2 sentences) of what you identified and why it's interesting or visually notable.
+
+Format your response EXACTLY as:
+COORDS: x1,y1,x2,y2
+DESCRIPTION: Your description here.

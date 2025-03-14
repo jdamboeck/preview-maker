@@ -6,24 +6,24 @@ Creates highlighted images with circular overlay and zoomed previews.
 import os
 from PIL import Image, ImageDraw, ImageFilter
 
-# Constants for image quality
-PNG_COMPRESSION = 4  # Balanced compression (range 0-9, lower is better quality)
-# PIL constants for resampling
-HIGH_RESAMPLING = 1  # Image.LANCZOS (1) is highest quality resampling filter
+# Import configuration
+import config
 
-# Default circle sizing parameters
-DEFAULT_SELECTION_RATIO = (
-    0.1  # Selection circle diameter as percentage of image's shortest dimension
-)
-DEFAULT_ZOOM_FACTOR = 3.0  # How much to zoom the preview
+# Get configuration values from config
+PNG_COMPRESSION = config.get_image_processing("png_compression")
+HIGH_RESAMPLING = config.get_image_processing("high_resampling")
+
+# Default circle sizing parameters (from config)
+DEFAULT_SELECTION_RATIO = config.get_image_processing("selection_ratio")
+DEFAULT_ZOOM_FACTOR = config.get_image_processing("zoom_factor")
 
 
 def create_highlighted_image(
     original_image,
     interesting_area,
     preview_center=None,
-    selection_ratio=DEFAULT_SELECTION_RATIO,
-    zoom_factor=DEFAULT_ZOOM_FACTOR,
+    selection_ratio=None,
+    zoom_factor=None,
     show_debug_overlay=False,
 ):
     """
@@ -35,13 +35,19 @@ def create_highlighted_image(
         preview_center: tuple (x, y) coordinates for the center of the preview circle
         (optional)
         selection_ratio: The size of the selection circle as a ratio of the image's
-        shortest dimension (default: 0.1 = 10%)
-        zoom_factor: How much to zoom the preview (default: 3.0)
+        shortest dimension (default from config)
+        zoom_factor: How much to zoom the preview (default from config)
         show_debug_overlay: Whether to draw the original bounding box as a debug overlay
 
     Returns:
         PIL Image: Processed image with highlight and zoomed preview
     """
+    # Apply default values from config if not specified
+    if selection_ratio is None:
+        selection_ratio = DEFAULT_SELECTION_RATIO
+    if zoom_factor is None:
+        zoom_factor = DEFAULT_ZOOM_FACTOR
+
     # Validate the interesting area coordinates
     x1, y1, x2, y2 = interesting_area
     width, height = original_image.size
@@ -335,7 +341,7 @@ def create_highlighted_image(
 
 
 def save_debug_image(
-    image, interesting_area, original_path, debug_dir="previews/debug", current_dir=None
+    image, interesting_area, original_path, debug_dir=None, current_dir=None
 ):
     """
     Save a debug image with a red dot at the most interesting spot.
@@ -344,8 +350,8 @@ def save_debug_image(
         image: PIL Image object
         interesting_area: tuple (x1, y1, x2, y2) coordinates of the interesting area
         original_path: Path to the original image
-        debug_dir: Directory to save debug images
-        current_dir: Current working directory
+        debug_dir: Directory to save debug images (should be absolute)
+        current_dir: Current working directory (relative to the input image)
 
     Returns:
         str: Path to the saved debug image
@@ -404,24 +410,36 @@ def save_debug_image(
     # Create output paths relative to the input directory
     base_filename = os.path.splitext(os.path.basename(original_path))[0] + ".png"
 
-    # Save in local debug directory
+    # Get the debug directory from config if not provided
+    if debug_dir is None:
+        debug_dir = config.get_path("debug_dir")
+
+    # Save in the configured debug directory (absolute path)
     os.makedirs(debug_dir, exist_ok=True)
     debug_path = os.path.join(debug_dir, f"debug_{base_filename}")
     debug_image.save(debug_path, format="PNG", compress_level=PNG_COMPRESSION)
 
-    # If current_dir exists, also save relative to input
+    # Print path info for debugging
+    print(f"Saved debug image to: {debug_path}")
+
+    # If current_dir exists, also save relative to input (for user convenience)
     if current_dir:
+        # Ensure current_dir is an absolute path
+        if not os.path.isabs(current_dir):
+            current_dir = os.path.abspath(current_dir)
+
         rel_debug_dir = os.path.join(current_dir, "previews", "debug")
         os.makedirs(rel_debug_dir, exist_ok=True)
         rel_debug_path = os.path.join(rel_debug_dir, f"debug_{base_filename}")
         debug_image.save(rel_debug_path, format="PNG", compress_level=PNG_COMPRESSION)
+        print(f"Also saved debug image to relative path: {rel_debug_path}")
         return rel_debug_path
 
     return debug_path
 
 
 def save_processed_image(
-    processed_image, original_path, output_dir="previews", current_dir=None
+    processed_image, original_path, output_dir=None, current_dir=None
 ):
     """
     Save the processed image with the original filename but as PNG.
@@ -429,8 +447,8 @@ def save_processed_image(
     Args:
         processed_image: PIL Image object of the processed image
         original_path: Path to the original image
-        output_dir: Directory to save processed images
-        current_dir: Current working directory
+        output_dir: Directory to save processed images (should be absolute)
+        current_dir: Current working directory (relative to the input image)
 
     Returns:
         str: Path to the saved processed image
@@ -441,19 +459,31 @@ def save_processed_image(
     # Get the base filename but change extension to .png
     base_filename = os.path.splitext(os.path.basename(original_path))[0] + ".png"
 
-    # Save in local previews directory
+    # Get the output directory from config if not provided
+    if output_dir is None:
+        output_dir = config.get_path("previews_dir")
+
+    # Save in the configured output directory (absolute path)
     os.makedirs(output_dir, exist_ok=True)
     output_path = os.path.join(output_dir, base_filename)
     processed_image.save(output_path, format="PNG", compress_level=PNG_COMPRESSION)
 
-    # If current_dir exists, also save relative to input
+    # Print path info for debugging
+    print(f"Saved processed image to: {output_path}")
+
+    # If current_dir exists, also save relative to input (for user convenience)
     if current_dir:
+        # Ensure current_dir is an absolute path
+        if not os.path.isabs(current_dir):
+            current_dir = os.path.abspath(current_dir)
+
         rel_preview_dir = os.path.join(current_dir, "previews")
         os.makedirs(rel_preview_dir, exist_ok=True)
         rel_output_path = os.path.join(rel_preview_dir, base_filename)
         processed_image.save(
             rel_output_path, format="PNG", compress_level=PNG_COMPRESSION
         )
+        print(f"Also saved processed image to relative path: {rel_output_path}")
         return rel_output_path
 
     return output_path
