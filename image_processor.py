@@ -4,17 +4,38 @@ Image processing module for kimono textile analyzer.
 Creates highlighted images with circular overlay and zoomed previews.
 """
 import os
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFilter
+
+# Constants for image quality
+PNG_COMPRESSION = 4  # Balanced compression (range 0-9, lower is better quality)
+# PIL constants for resampling
+HIGH_RESAMPLING = 1  # Image.LANCZOS (1) is highest quality resampling filter
+
+# Default circle sizing parameters
+DEFAULT_SELECTION_RATIO = (
+    0.1  # Selection circle diameter as percentage of image's shortest dimension
+)
+DEFAULT_ZOOM_FACTOR = 3.0  # How much to zoom the preview
 
 
-def create_highlighted_image(original_image, interesting_area, preview_center=None):
+def create_highlighted_image(
+    original_image,
+    interesting_area,
+    preview_center=None,
+    selection_ratio=DEFAULT_SELECTION_RATIO,
+    zoom_factor=DEFAULT_ZOOM_FACTOR,
+):
     """
     Create an image with a circular highlight and zoomed preview of the interesting area.
 
     Args:
         original_image: PIL Image object of the original image
         interesting_area: tuple (x1, y1, x2, y2) coordinates of the interesting area
-        preview_center: tuple (x, y) coordinates for the center of the preview circle (optional)
+        preview_center: tuple (x, y) coordinates for the center of the preview circle
+        (optional)
+        selection_ratio: The size of the selection circle as a ratio of the image's
+        shortest dimension (default: 0.1 = 10%)
+        zoom_factor: How much to zoom the preview (default: 3.0)
 
     Returns:
         PIL Image: Processed image with highlight and zoomed preview
@@ -39,16 +60,21 @@ def create_highlighted_image(original_image, interesting_area, preview_center=No
     interesting_area = (x1, y1, x2, y2)
 
     # Make a copy of the original image
-    result = original_image.copy()
-    draw = ImageDraw.Draw(result)
+    # Ensure we're working in RGBA mode to preserve quality during processing
+    if original_image.mode != "RGBA":
+        result = original_image.copy().convert("RGBA")
+    else:
+        result = original_image.copy()
 
     # Get the interesting area coordinates
     x1, y1, x2, y2 = interesting_area
     center_x = (x1 + x2) // 2
     center_y = (y1 + y2) // 2
 
-    # Set the circle to exactly 256 pixels in diameter
-    highlight_radius = 128  # Radius for a 256 pixel diameter circle
+    # Calculate the selection circle size based on the image dimensions
+    shortest_dimension = min(width, height)
+    highlight_diameter = int(shortest_dimension * selection_ratio)
+    highlight_radius = highlight_diameter // 2  # Radius for the selection circle
 
     # Create a transparent overlay for dark gray with transparency
     overlay = Image.new("RGBA", result.size, (0, 0, 0, 0))
@@ -62,19 +88,26 @@ def create_highlighted_image(original_image, interesting_area, preview_center=No
         ],
         fill=(50, 50, 50, 160),  # Dark gray with increased opacity
         outline=(255, 120, 0, 230),  # Orange outline to match the connecting line
-        width=12,  # Increased border width
+        width=max(
+            1, int(highlight_radius * 0.09)
+        ),  # Border width proportional to radius
     )
 
     # Print dimensions for debugging
-    print(f"DEBUG: Circle diameter = {highlight_radius*2} pixels with 10px border")
+    print(
+        f"DEBUG: Circle diameter = {highlight_radius*2} pixels with proportional border"
+    )
+    print(
+        f"DEBUG: Image dimensions = {width}x{height}, selection ratio = {selection_ratio}"
+    )
+
+    # Apply a slight blur to the overlay for smoother edges
+    overlay = overlay.filter(ImageFilter.GaussianBlur(radius=0.5))
 
     # Paste the overlay onto the result
-    if result.mode != "RGBA":
-        result = result.convert("RGBA")
     result = Image.alpha_composite(result, overlay)
 
     # Create a zoomed view of the interesting part
-    zoom_factor = 3.0  # 3x zoom as requested
     zoom_radius = int(highlight_radius * zoom_factor)
 
     # Calculate the position for the zoomed preview
@@ -98,7 +131,8 @@ def create_highlighted_image(original_image, interesting_area, preview_center=No
     # Extract the region to zoom
     if preview_center:
         preview_x, preview_y = preview_center
-        # We should extract the region around the magnification center (not the preview center)
+        # We should extract the region around the magnification center
+        # (not the preview center)
         crop_region = original_image.crop(
             (
                 max(0, center_x - highlight_radius),
@@ -111,7 +145,9 @@ def create_highlighted_image(original_image, interesting_area, preview_center=No
         # The preview center determines where to place the zoomed preview
         # Calculate the position of the zoomed preview based on the preview center
         zoom_size = zoom_radius * 2
-        zoom_padding = 10  # Padding from the edge
+        zoom_padding = int(
+            max(10, shortest_dimension * 0.01)
+        )  # Padding from the edge (proportional)
 
         # Place the zoomed preview centered on the preview point
         zoom_x = max(0, min(width - zoom_size, preview_x - zoom_size // 2))
@@ -144,7 +180,9 @@ def create_highlighted_image(original_image, interesting_area, preview_center=No
 
         # Calculate the position of the zoomed preview
         zoom_size = zoom_radius * 2
-        zoom_padding = 10  # Padding from the edge
+        zoom_padding = int(
+            max(10, shortest_dimension * 0.01)
+        )  # Padding from the edge (proportional)
 
         if "top" in corner_name:
             zoom_y = zoom_padding
@@ -156,30 +194,35 @@ def create_highlighted_image(original_image, interesting_area, preview_center=No
         else:
             zoom_x = width - zoom_size - zoom_padding
 
-    # Resize for the zoom effect (use BICUBIC instead of LANCZOS)
-    zoomed = crop_region.resize((zoom_size, zoom_size), resample=3)  # 3 = BICUBIC
+    # Resize for the zoom effect (use LANCZOS instead of BICUBIC for highest quality)
+    zoomed = crop_region.resize((zoom_size, zoom_size), resample=HIGH_RESAMPLING)
 
-    # Convert result back to RGB if needed for compatibility
-    if result.mode == "RGBA":
-        rgb_result = Image.new("RGB", result.size, (255, 255, 255))
-        rgb_result.paste(result, mask=result.split()[3])  # Use alpha channel as mask
-        result = rgb_result
+    # Create a larger mask for antialiasing
+    mask_size = zoom_size + 4  # Slightly larger for smooth edges
 
-    # Apply a circular mask to the zoomed preview
-    mask = Image.new("L", (zoom_size, zoom_size), 0)
-    mask_draw = ImageDraw.Draw(mask)
-    mask_draw.ellipse((0, 0, zoom_size, zoom_size), fill=255)
+    # First create a larger mask with blur for antialiasing
+    big_mask = Image.new("L", (mask_size, mask_size), 0)
+    big_mask_draw = ImageDraw.Draw(big_mask)
+    big_mask_draw.ellipse((2, 2, mask_size - 2, mask_size - 2), fill=255)
 
-    # Create a background for the zoomed preview
+    # Apply a slight blur for antialiasing edges
+    smooth_mask = big_mask.filter(ImageFilter.GaussianBlur(radius=1.5))
+
+    # Resize back to the exact size we need
+    mask = smooth_mask.resize((zoom_size, zoom_size), resample=HIGH_RESAMPLING)
+
+    # Create a background for the zoomed preview with slightly rounded corners
     zoom_bg = Image.new("RGBA", (zoom_size, zoom_size), (255, 255, 255, 180))
 
     # Apply the mask to both the zoomed image and background
-    zoomed = zoomed.convert("RGBA")
+    if zoomed.mode != "RGBA":
+        zoomed = zoomed.convert("RGBA")
     zoomed.putalpha(mask)
     zoom_bg.putalpha(mask)
 
-    # Convert result back to RGBA for pasting
-    result = result.convert("RGBA")
+    # Ensure result is in RGBA for pasting
+    if result.mode != "RGBA":
+        result = result.convert("RGBA")
 
     # Paste the background first
     result.paste(zoom_bg, (zoom_x, zoom_y), zoom_bg)
@@ -187,29 +230,60 @@ def create_highlighted_image(original_image, interesting_area, preview_center=No
     # Then paste the zoomed image
     result.paste(zoomed, (zoom_x, zoom_y), zoomed)
 
-    # Draw a border around the zoomed preview
-    draw.rectangle(
-        [(zoom_x, zoom_y), (zoom_x + zoom_size, zoom_y + zoom_size)],
-        outline=(255, 120, 0, 255),  # ORANGE outline
-        width=10,  # 10 pixels width
+    # Draw a border around the zoomed preview with antialiasing
+    result_draw = ImageDraw.Draw(result)
+    border_color = (255, 120, 0, 255)  # ORANGE outline
+    border_width = max(
+        5, int(zoom_size * 0.05)
+    )  # Border width proportional to zoomed size
+
+    # Draw a slightly blurred rectangle for the border to achieve antialiasing
+    border_img = Image.new(
+        "RGBA",
+        (zoom_size + border_width * 2, zoom_size + border_width * 2),
+        (0, 0, 0, 0),
     )
+    border_draw = ImageDraw.Draw(border_img)
+
+    # Draw the outer and inner circles for the border
+    border_draw.ellipse(
+        (0, 0, zoom_size + border_width * 2 - 1, zoom_size + border_width * 2 - 1),
+        fill=border_color,
+    )
+    border_draw.ellipse(
+        (
+            border_width,
+            border_width,
+            zoom_size + border_width - 1,
+            zoom_size + border_width - 1,
+        ),
+        fill=(0, 0, 0, 0),
+    )
+
+    # Apply blur for smoother edges
+    border_img = border_img.filter(ImageFilter.GaussianBlur(radius=0.7))
+
+    # Paste the border image
+    result.paste(border_img, (zoom_x - border_width, zoom_y - border_width), border_img)
 
     # Draw a line connecting the interesting area to the zoomed preview
     if preview_center:
-        # Draw a line from the magnification point (center_x, center_y) to the zoomed preview
-        draw.line(
+        # Draw a line from the magnification point to the zoomed preview
+        line_width = max(2, int(shortest_dimension * 0.003))  # Proportional line width
+        result_draw.line(
             [
                 (center_x, center_y),
                 (zoom_x + zoom_size // 2, zoom_y + zoom_size // 2),
             ],
             fill=(255, 120, 0, 255),  # ORANGE line
-            width=4,  # Thicker line
+            width=line_width,
         )
     else:
-        draw.line(
+        line_width = max(2, int(shortest_dimension * 0.003))  # Proportional line width
+        result_draw.line(
             [(center_x, center_y), (zoom_x + zoom_size // 2, zoom_y + zoom_size // 2)],
             fill=(255, 120, 0, 255),  # ORANGE line
-            width=4,  # Thicker line
+            width=line_width,
         )
 
     return result
@@ -232,7 +306,6 @@ def save_debug_image(
         str: Path to the saved debug image
     """
     debug_image = image.copy()
-    draw = ImageDraw.Draw(debug_image)
 
     # Validate the interesting area coordinates
     x1, y1, x2, y2 = interesting_area
@@ -257,14 +330,26 @@ def save_debug_image(
     center_x = (x1 + x2) // 2
     center_y = (y1 + y2) // 2
 
-    # Draw a big red dot
-    dot_radius = 20
-    draw.ellipse(
-        [
-            (center_x - dot_radius, center_y - dot_radius),
-            (center_x + dot_radius, center_y + dot_radius),
-        ],
-        fill="red",
+    # Draw a big red dot with smooth edges - size proportional to image
+    shortest_dimension = min(width, height)
+    dot_radius = int(shortest_dimension * 0.02)  # 2% of image's shortest dimension
+
+    # Create a separate image for the dot with antialiasing
+    dot_img = Image.new("RGBA", (dot_radius * 2 + 4, dot_radius * 2 + 4), (0, 0, 0, 0))
+    dot_draw = ImageDraw.Draw(dot_img)
+    dot_draw.ellipse(
+        [2, 2, dot_radius * 2 + 2, dot_radius * 2 + 2], fill=(255, 0, 0, 255)  # Red
+    )
+    # Apply blur for antialiasing
+    dot_img = dot_img.filter(ImageFilter.GaussianBlur(radius=1.0))
+
+    # Ensure the debug image is in RGBA mode for compositing
+    if debug_image.mode != "RGBA":
+        debug_image = debug_image.convert("RGBA")
+
+    # Paste the dot onto the debug image
+    debug_image.paste(
+        dot_img, (center_x - dot_radius - 2, center_y - dot_radius - 2), dot_img
     )
 
     # Create output paths relative to the input directory
@@ -273,14 +358,14 @@ def save_debug_image(
     # Save in local debug directory
     os.makedirs(debug_dir, exist_ok=True)
     debug_path = os.path.join(debug_dir, f"debug_{base_filename}")
-    debug_image.save(debug_path, format="PNG", compress_level=3)
+    debug_image.save(debug_path, format="PNG", compress_level=PNG_COMPRESSION)
 
     # If current_dir exists, also save relative to input
     if current_dir:
         rel_debug_dir = os.path.join(current_dir, "previews", "debug")
         os.makedirs(rel_debug_dir, exist_ok=True)
         rel_debug_path = os.path.join(rel_debug_dir, f"debug_{base_filename}")
-        debug_image.save(rel_debug_path, format="PNG", compress_level=3)
+        debug_image.save(rel_debug_path, format="PNG", compress_level=PNG_COMPRESSION)
         return rel_debug_path
 
     return debug_path
@@ -310,14 +395,16 @@ def save_processed_image(
     # Save in local previews directory
     os.makedirs(output_dir, exist_ok=True)
     output_path = os.path.join(output_dir, base_filename)
-    processed_image.save(output_path, format="PNG", compress_level=3)
+    processed_image.save(output_path, format="PNG", compress_level=PNG_COMPRESSION)
 
     # If current_dir exists, also save relative to input
     if current_dir:
         rel_preview_dir = os.path.join(current_dir, "previews")
         os.makedirs(rel_preview_dir, exist_ok=True)
         rel_output_path = os.path.join(rel_preview_dir, base_filename)
-        processed_image.save(rel_output_path, format="PNG", compress_level=3)
+        processed_image.save(
+            rel_output_path, format="PNG", compress_level=PNG_COMPRESSION
+        )
         return rel_output_path
 
     return output_path

@@ -3,12 +3,20 @@
 Kimono Textile Analyzer - Finds interesting textile patterns in kimono images
 using Google Gemini AI and creates a zoomed-in circular overlay.
 """
+
 import os
 import sys
 import threading
 
 # GTK imports first
 import gi
+
+# Image processing imports
+from PIL import Image
+
+# Import our custom modules
+import gemini_analyzer
+import image_processor
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Gdk", "4.0")
@@ -26,12 +34,6 @@ except ImportError:
         "Run 'pip install google-generativeai' to enable AI features."
     )
 
-# Image processing imports
-from PIL import Image
-
-# Import our custom modules
-import gemini_analyzer
-import image_processor
 
 # Create previews directory if it doesn't exist
 PREVIEWS_DIR = "previews"
@@ -70,6 +72,9 @@ class KimonoAnalyzer(Gtk.Application):
         # Track original image dimensions
         self.original_img_width = 0
         self.original_img_height = 0
+        # Configurable parameters for circle sizes
+        self.selection_ratio = 0.1  # 10% of shortest dimension
+        self.zoom_factor = 3.0  # 3x zoom factor
 
     def on_activate(self, app):
         """Initialize the application window and UI components."""
@@ -948,9 +953,8 @@ class KimonoAnalyzer(Gtk.Application):
             width, height = self.current_image.size
             print(f"Image dimensions: {width}x{height}")
 
-            # Convert to RGB if it's RGBA to avoid JPEG conversion issues
-            if self.current_image.mode == "RGBA":
-                self.current_image = self.current_image.convert("RGB")
+            # Keep RGBA mode when possible - only convert to RGB when sending to Gemini API
+            # We'll use a copy for the Gemini API to avoid modifying the original
 
             # Check if we have manually selected points
             if (
@@ -970,9 +974,10 @@ class KimonoAnalyzer(Gtk.Application):
                 print(f"Magnification point: ({mag_x}, {mag_y})")
                 print(f"Preview point: ({preview_x}, {preview_y})")
 
-                # Create a bounding box around the magnification point
-                # Use a 256x256 box centered on the magnification point
-                radius = 128
+                # Calculate the selection circle radius based on image size
+                shortest_dimension = min(width, height)
+                selection_diameter = int(shortest_dimension * self.selection_ratio)
+                radius = selection_diameter // 2
 
                 # Calculate the bounding box coordinates
                 x1 = max(0, mag_x - radius)
@@ -998,22 +1003,35 @@ class KimonoAnalyzer(Gtk.Application):
                 interesting_area = (x1, y1, x2, y2)
                 print(f"Using manually selected area: {interesting_area}")
 
-                # Create a processed image with the highlight
+                # Create a processed image with the highlight, passing the configurable parameters
                 self.processed_image = image_processor.create_highlighted_image(
                     self.current_image,
                     interesting_area,
                     preview_center=(preview_x, preview_y),
+                    selection_ratio=self.selection_ratio,
+                    zoom_factor=self.zoom_factor,
                 )
             else:
                 # Use Gemini AI to identify interesting textile parts
                 print("No valid manual selection, using Gemini AI")
+
+                # For Gemini API, we need to make a copy that might need RGB conversion
+                gemini_image = self.current_image
+                if gemini_image.mode == "RGBA":
+                    # Only convert the copy to RGB for the API
+                    gemini_image = gemini_image.copy().convert("RGB")
+
                 interesting_area = gemini_analyzer.identify_interesting_textile(
-                    self.current_image
+                    gemini_image
                 )
 
-                # Create a processed image with the highlight
+                # Create a processed image with the highlight - use original image to preserve quality
+                # Pass the configurable parameters
                 self.processed_image = image_processor.create_highlighted_image(
-                    self.current_image, interesting_area
+                    self.current_image,
+                    interesting_area,
+                    selection_ratio=self.selection_ratio,
+                    zoom_factor=self.zoom_factor,
                 )
 
             # Show notification about AI status

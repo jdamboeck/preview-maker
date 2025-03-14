@@ -70,16 +70,16 @@ def identify_interesting_textile(image, custom_prompt=None):
         if max(image.size) > max_dim:
             ratio = max_dim / max(image.size)
             new_size = (int(image.size[0] * ratio), int(image.size[1] * ratio))
-            # Use BICUBIC instead of LANCZOS for better compatibility
-            resized_img = image.resize(new_size, resample=3)  # 3 = BICUBIC
+            # Use LANCZOS for highest quality resampling
+            resized_img = image.resize(new_size, resample=1)  # 1 = LANCZOS
 
         # Ensure image is in RGB mode (not RGBA) before saving as JPEG
         if resized_img.mode == "RGBA":
             resized_img = resized_img.convert("RGB")
 
-        # Save to buffer for Gemini API
+        # Save to buffer for Gemini API with high quality setting
         buffer = BytesIO()
-        resized_img.save(buffer, format="JPEG")
+        resized_img.save(buffer, format="JPEG", quality=95)
         buffer.seek(0)
 
         # Configure the model - update to use the newer recommended model
