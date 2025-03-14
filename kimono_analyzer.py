@@ -391,40 +391,73 @@ class KimonoAnalyzer(Gtk.Application):
         self.spinner.set_valign(Gtk.Align.CENTER)
         overlay.add_overlay(self.spinner)
 
-        # Create main layout with increased spacing and margins
-        vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
-        vbox.set_margin_top(20)
-        vbox.set_margin_bottom(20)
-        vbox.set_margin_start(20)
-        vbox.set_margin_end(20)
+        # Create main layout as horizontal box
+        hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
+        hbox.set_margin_top(20)
+        hbox.set_margin_bottom(20)
+        hbox.set_margin_start(20)
+        hbox.set_margin_end(20)
+
+        # Create a container for the image with padding - LEFT SIDE
+        image_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        image_container.set_hexpand(True)
+        image_container.set_vexpand(True)
+        image_container.set_margin_start(12)
+        image_container.set_margin_end(12)
+        image_container.set_margin_top(12)
+        image_container.set_margin_bottom(12)
 
         # Add a frame around the image overlay for better visual separation
         image_frame = Gtk.Frame()
         image_frame.set_child(overlay)
-        image_frame.set_margin_bottom(12)
-        vbox.append(image_frame)
+        image_frame.set_hexpand(True)  # Let the image expand horizontally
+        image_frame.set_vexpand(True)  # Let the image expand vertically
 
-        # Add a description display area
+        image_container.append(image_frame)
+        hbox.append(image_container)
+
+        # Create a container for the controls with padding - RIGHT SIDE
+        controls_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        controls_container.set_margin_start(12)
+        controls_container.set_margin_end(12)
+        controls_container.set_margin_top(12)
+        controls_container.set_margin_bottom(12)
+
+        # Create a vertical box for all UI controls
+        controls_box = Gtk.Box(
+            orientation=Gtk.Orientation.VERTICAL, spacing=20
+        )  # Increased spacing
+        controls_box.set_size_request(350, -1)  # Set minimum width for controls
+        controls_box.set_vexpand(True)  # Make sure it uses full height
+        controls_box.set_margin_start(8)
+        controls_box.set_margin_end(8)
+        controls_box.set_margin_top(8)
+        controls_box.set_margin_bottom(8)
+
+        # Create description section
         description_frame = Gtk.Frame()
         description_frame.set_label("AI Description")
 
-        description_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
-        description_box.set_margin_top(8)
-        description_box.set_margin_bottom(8)
-        description_box.set_margin_start(8)
-        description_box.set_margin_end(8)
+        # Use ScrolledWindow for description to allow auto-sizing
+        description_scroll = Gtk.ScrolledWindow()
+        description_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        description_scroll.set_min_content_height(100)
+        description_scroll.set_propagate_natural_height(True)
 
         self.description_label = Gtk.Label()
-        self.description_label.set_wrap(True)
+        self.description_label.set_valign(Gtk.Align.START)
+        self.description_label.set_halign(Gtk.Align.START)
+        self.description_label.set_margin_start(12)
+        self.description_label.set_margin_end(12)
+        self.description_label.set_margin_top(12)
+        self.description_label.set_margin_bottom(12)
         self.description_label.set_selectable(True)
-        self.description_label.set_xalign(0)  # Left align text
+        self.description_label.set_wrap(True)
         self.description_label.set_text("Run detection to see Gemini's description")
-        self.description_label.add_css_class("description-text")
-
-        description_box.append(self.description_label)
-        description_frame.set_child(description_box)
-        description_frame.set_margin_bottom(12)
-        vbox.append(description_frame)
+        self.description_label.get_style_context().add_class("description-text")
+        description_scroll.set_child(self.description_label)
+        description_frame.set_child(description_scroll)
+        controls_box.append(description_frame)
 
         # Get the default prompt from file
         try:
@@ -440,12 +473,17 @@ class KimonoAnalyzer(Gtk.Application):
             )
 
         # Create prompt customization section with improved styling
-        prompt_section = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        prompt_section.set_margin_bottom(16)
+        prompt_section = Gtk.Box(
+            orientation=Gtk.Orientation.VERTICAL, spacing=12
+        )  # Increased spacing
+        prompt_section.set_margin_bottom(20)  # Increased margin
+        prompt_section.set_vexpand(True)  # Allow it to expand vertically to fill space
 
         # Add a section for target type
-        target_section = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        target_section.set_margin_bottom(8)
+        target_section = Gtk.Box(
+            orientation=Gtk.Orientation.HORIZONTAL, spacing=10
+        )  # Increased spacing
+        target_section.set_margin_bottom(12)  # Increased margin
 
         target_label = Gtk.Label(label="Target Type:")
         target_label.set_halign(Gtk.Align.START)
@@ -465,6 +503,12 @@ class KimonoAnalyzer(Gtk.Application):
         self.target_entry.set_hexpand(True)
         target_section.append(self.target_entry)
 
+        # Add the Rerun Detection button next to target type
+        rerun_button = Gtk.Button(label="Rerun Detection")
+        rerun_button.connect("clicked", self.rerun_detection)
+        rerun_button.set_margin_start(8)
+        target_section.append(rerun_button)
+
         prompt_section.append(target_section)
 
         prompt_header = Gtk.Label(label="Custom Gemini Prompt Template:")
@@ -477,16 +521,18 @@ class KimonoAnalyzer(Gtk.Application):
         self.prompt_entry = Gtk.TextView()
         self.prompt_entry.set_wrap_mode(Gtk.WrapMode.WORD)
         self.prompt_entry.get_buffer().set_text(default_prompt)
-        self.prompt_entry.set_top_margin(8)
-        self.prompt_entry.set_bottom_margin(8)
-        self.prompt_entry.set_left_margin(8)
-        self.prompt_entry.set_right_margin(8)
+        self.prompt_entry.set_top_margin(12)
+        self.prompt_entry.set_bottom_margin(12)
+        self.prompt_entry.set_left_margin(12)
+        self.prompt_entry.set_right_margin(12)
+        self.prompt_entry.add_css_class("prompt-text")  # Add class for styling
 
         # Add scrolling for the text entry with improved styling
         prompt_scroll = Gtk.ScrolledWindow()
-        prompt_scroll.set_min_content_height(100)  # Taller text area
+        prompt_scroll.set_min_content_height(150)  # Taller text area
+        prompt_scroll.set_vexpand(True)  # Let the scroll area expand vertically
         prompt_scroll.set_child(self.prompt_entry)
-        prompt_scroll.set_margin_bottom(4)
+        prompt_scroll.set_margin_bottom(8)
         prompt_section.append(prompt_scroll)
 
         # Add buttons to save or reset prompt
@@ -523,11 +569,16 @@ class KimonoAnalyzer(Gtk.Application):
         targeting_note.set_margin_top(2)
         prompt_section.append(targeting_note)
 
-        vbox.append(prompt_section)
+        controls_box.append(prompt_section)
 
         # Add debug options section
-        debug_section = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-        debug_section.set_margin_bottom(12)
+        debug_section = Gtk.Box(
+            orientation=Gtk.Orientation.VERTICAL, spacing=12
+        )  # Increased spacing
+        debug_section.set_margin_bottom(16)  # Increased margin
+
+        # Add a horizontal box for the debug checkbox and sliders
+        debug_controls = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
 
         # Add debug checkbox for showing the API boundary
         self.debug_checkbox = Gtk.CheckButton()
@@ -537,37 +588,51 @@ class KimonoAnalyzer(Gtk.Application):
         )
         self.debug_checkbox.set_active(self.debug_mode)
         self.debug_checkbox.connect("toggled", self.on_debug_toggled)
-        debug_section.append(self.debug_checkbox)
+        debug_controls.append(self.debug_checkbox)
 
-        # Add sizing controls
+        debug_section.append(debug_controls)
+
+        # Add a horizontal box for size controls
+        size_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+
+        # Size label
         size_label = Gtk.Label(label="Selection Size:")
-        size_label.set_margin_start(20)
-        debug_section.append(size_label)
+        size_label.set_halign(Gtk.Align.START)
+        size_label.set_size_request(100, -1)  # Fixed width for label
+        size_box.append(size_label)
 
         # Add a scale for adjusting the selection circle size
         size_scale = Gtk.Scale.new_with_range(
             Gtk.Orientation.HORIZONTAL, 0.05, 0.3, 0.01
         )
         size_scale.set_value(self.selection_ratio)
-        size_scale.set_size_request(150, -1)
+        size_scale.set_hexpand(True)
         size_scale.set_tooltip_text("Adjust the size of the selection circle")
         size_scale.connect("value-changed", self.on_selection_size_changed)
-        debug_section.append(size_scale)
+        size_box.append(size_scale)
 
-        # Add zoom factor control
+        debug_section.append(size_box)
+
+        # Add a horizontal box for zoom controls
+        zoom_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+
+        # Zoom label
         zoom_label = Gtk.Label(label="Zoom:")
-        zoom_label.set_margin_start(20)
-        debug_section.append(zoom_label)
+        zoom_label.set_halign(Gtk.Align.START)
+        zoom_label.set_size_request(100, -1)  # Fixed width for label
+        zoom_box.append(zoom_label)
 
         # Add a scale for adjusting the zoom factor
         zoom_scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 1.5, 5.0, 0.1)
         zoom_scale.set_value(self.zoom_factor)
-        zoom_scale.set_size_request(150, -1)
+        zoom_scale.set_hexpand(True)
         zoom_scale.set_tooltip_text("Adjust the zoom factor")
         zoom_scale.connect("value-changed", self.on_zoom_factor_changed)
-        debug_section.append(zoom_scale)
+        zoom_box.append(zoom_scale)
 
-        vbox.append(debug_section)
+        debug_section.append(zoom_box)
+
+        controls_box.append(debug_section)
 
         # Add buttons with improved styling
         button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
@@ -585,30 +650,32 @@ class KimonoAnalyzer(Gtk.Application):
         button_box.append(help_text)
 
         # Create styled buttons
-        rerun_button = Gtk.Button(label="Rerun Detection")
-        rerun_button.connect("clicked", self.rerun_detection)
-        rerun_button.set_margin_end(8)
-
         apply_button = Gtk.Button(label="Apply Changes")
         apply_button.connect("clicked", self.apply_manual_changes)
         apply_button.add_css_class("suggested-action")  # Highlight this button
 
-        button_box.append(rerun_button)
         button_box.append(apply_button)
 
-        vbox.append(button_box)
+        controls_box.append(button_box)
+
+        # Add the controls box to the main horizontal layout
+        hbox.append(controls_box)
 
         # Add CSS styling
         css_provider = Gtk.CssProvider()
         css_provider.load_from_data(
             b"""
             .heading {
+                font-size: 20px;
                 font-weight: bold;
-                font-size: 15px;
             }
             .description-text {
-                font-size: 14px;
-                padding: 4px;
+                font-size: 16px;
+                line-height: 1.5;
+            }
+            .prompt-text {
+                font-size: 18px;
+                line-height: 1.5;
             }
             """
         )
@@ -619,7 +686,7 @@ class KimonoAnalyzer(Gtk.Application):
             display, css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
         )
 
-        manual_window.set_child(vbox)
+        manual_window.set_child(hbox)
 
         # Show the window
         manual_window.present()
