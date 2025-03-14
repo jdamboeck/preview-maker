@@ -111,7 +111,8 @@ class KimonoAnalyzer(Gtk.Application):
         self.window = Gtk.ApplicationWindow(
             application=app, title="Kimono Textile Analyzer - Dropper"
         )
-        self.window.set_default_size(400, 300)  # Better default size
+        # Set a minimum size but let it grow to fit content
+        self.window.set_size_request(350, 300)
 
         # Check if Gemini AI is available and show notification if not
         if not GENAI_AVAILABLE:
@@ -131,6 +132,8 @@ class KimonoAnalyzer(Gtk.Application):
         drop_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=20)
         drop_box.set_vexpand(True)
         drop_box.set_hexpand(True)
+        # Set minimum size for drop box to ensure usable area
+        drop_box.set_size_request(320, 200)
 
         # Automatic mode drop area
         auto_drop_area = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
@@ -329,7 +332,16 @@ class KimonoAnalyzer(Gtk.Application):
 
         # Create a new window for manual mode with the updated title format
         manual_window = Gtk.Window(title="Kimono Textile Analyzer - Manual")
-        manual_window.set_default_size(window_width, window_height)
+
+        # Make the window automatically fit content with a reasonable max size
+        if img_width > max_width or img_height > max_height:
+            # Set a maximum size that fits on screen
+            manual_window.set_default_size(window_width, window_height)
+        else:
+            # Let it size to content naturally, with a minimum reasonable size
+            manual_window.set_size_request(
+                min(600, img_width + 400), min(500, img_height + 100)
+            )
 
         # Initialize normalized points to offscreen
         self.selected_magnification_point_norm = (-1.0, -1.0)  # Offscreen
@@ -1257,7 +1269,8 @@ class KimonoAnalyzer(Gtk.Application):
         # Create a new dialog window
         dialog = Gtk.Window()
         dialog.set_title("Advanced Settings")
-        dialog.set_default_size(600, 500)
+        # Let dialog size to its content automatically but with minimum dimensions
+        dialog.set_size_request(500, 400)
         dialog.set_modal(True)  # Makes it a modal dialog
         dialog.set_transient_for(self.window)  # Set parent window
 
@@ -1373,6 +1386,7 @@ class KimonoAnalyzer(Gtk.Application):
         prompt_scroll = Gtk.ScrolledWindow()
         prompt_scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
         prompt_scroll.set_vexpand(True)
+        prompt_scroll.set_size_request(-1, 200)  # Set minimum height for text area
 
         # Add a text view for the prompt
         prompt_text_view = Gtk.TextView()
