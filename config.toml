@@ -12,7 +12,7 @@ png_compression = 4
 high_resampling = 1
 
 [gemini_api]
-model_name = "gemini-1.5-pro-vision"
+model_name = "gemini-1.5-flash"
 max_output_tokens = 256
 temperature = 0.1
 top_p = 0.95

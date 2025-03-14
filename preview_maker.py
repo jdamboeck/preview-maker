@@ -1279,19 +1279,20 @@ X-GNOME-UsesNotifications=true
 
             # Redraw the circle area
             GLib.idle_add(lambda: self.circle_area and self.circle_area.queue_draw())
-            # Update notification based on whether we got a valid boundary box from Gemini API
+
+            # Show a more informative notification based on detection success
             if raw_box:
                 GLib.idle_add(
                     self.show_notification,
-                    "Detection complete - Gemini API successful.",
+                    "Detection complete: Successfully identified area of interest.",
                     2,
                     True,
                 )
             else:
                 GLib.idle_add(
                     self.show_notification,
-                    "Detection complete - using fallback detection (centered selection).",
-                    3,
+                    "Detection complete: Could not identify specific area.",
+                    2,
                     True,
                 )
         except Exception as e:
@@ -1509,8 +1510,24 @@ X-GNOME-UsesNotifications=true
     def _update_description_in_ui(self, description):
         """Update the description label in the UI (called from the main thread)."""
         if hasattr(self, "description_label") and self.description_label:
-            self.description_label.set_text(description)
-            self.description_label.set_tooltip_text(description)
+            # Make the description more noticeable by adding a prefix
+            if description:
+                # Trim excessively long descriptions
+                if len(description) > 500:
+                    description = description[:497] + "..."
+
+                display_text = f"AI: {description}"
+                self.description_label.set_text(display_text)
+                self.description_label.set_tooltip_text(description)
+
+                # Log to console for debugging
+                print(f"Updated UI with description: {description}")
+
+                # Highlight using a notification too
+                if hasattr(self, "show_notification"):
+                    self.show_notification("Received description from Gemini AI", 2)
+            else:
+                self.description_label.set_text("No description available from AI")
         return False  # For GLib.idle_add
 
     def show_advanced_settings(self, button):

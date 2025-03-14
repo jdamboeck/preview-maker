@@ -1,11 +1,8 @@
-# User Prompt: Image Detail Detection
-
 Please analyze this image and identify ONE SPECIFIC {target_type} that stands out.
 
 I need you to find a SINGLE, DISTINCT object or feature in this image - not a general area.
 
-## Analysis Process
-
+Analysis Process:
 1. Scan the entire image for distinct {target_type} elements
 2. Identify ONE specific element that is:
    - Clearly defined with distinct boundaries

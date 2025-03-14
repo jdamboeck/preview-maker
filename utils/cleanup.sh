@@ -13,7 +13,19 @@ rm -f kimono_analyzer.py
 rm -f image_processor.py
 rm -f gemini_analyzer.py
 rm -f sample_kimono.jpg
-rm -f prompts/*.txt
+rm -f prompts/*.txton: Gemini API failed to provide a valid bounding box
+Sending desktop notification: Gemini API failed to provide a valid bounding box
+Notification: Detection complete.
+Sending desktop notification: Detection complete.
+Notification: Gemini API failed to provide a valid bounding box
+Sending desktop notification: Gemini API failed to provide a valid bounding box
+Notification: Detection complete.
+Sending desktop notification: Detection complete.
+Notification: Gemini API failed to provide a valid bounding box
+Sending desktop notification: Gemini API failed to provide a valid bounding box
+Notification: Detection complete.
+Sending desktop notification: Detection complete.
+Notificati
 rm -f test_with_preview.png
 rm -f test_without_preview.png
 
