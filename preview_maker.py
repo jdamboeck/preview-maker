@@ -75,6 +75,9 @@ class PreviewMaker(Gtk.Application):
 
         self.current_image = None
         self.processed_image = None
+        self.processed_image_with_debug = (
+            None  # For on-screen display with debug overlay
+        )
         self.processing = False
         self.image_queue = []
         self.current_image_path = None
@@ -82,6 +85,8 @@ class PreviewMaker(Gtk.Application):
         self.notification = None  # Will hold the current libnotify notification
         # For tracking active notifications
         self.last_notification_id = None
+        # For tracking specific notifications to prevent flooding
+        self._notification_timestamps = {}
         # Store normalized coordinates (0-1) instead of pixels
         self.selected_magnification_point_norm = None
         self.selected_preview_point_norm = None
@@ -96,10 +101,10 @@ class PreviewMaker(Gtk.Application):
         self.original_img_width = 0
         self.original_img_height = 0
         # Configurable parameters for circle sizes
-        self.selection_ratio = 0.1  # 10% of shortest dimension
-        self.zoom_factor = 3.0  # 3x zoom factor
+        self.selection_ratio = config.get_image_processing("selection_ratio")
+        self.zoom_factor = config.get_image_processing("zoom_factor")
         # Debug mode flag
-        self.debug_mode = False
+        self.debug_mode = False  # Default to debug mode off
         # Store the description from Gemini
         self.gemini_description = None
 
@@ -321,21 +326,30 @@ X-GNOME-UsesNotifications=true
         # Only proceed with desktop notification if explicitly requested
         if use_desktop_notification:
             try:
-                # Avoid sending duplicate or rapid notifications
-                if (
-                    hasattr(self, "_last_notification_message")
-                    and message == self._last_notification_message
-                ):
-                    # If the same message is sent within 1 second, skip it
-                    current_time = time.time()
-                    if (
-                        hasattr(self, "_last_notification_time")
-                        and (current_time - self._last_notification_time) < 1
-                    ):
-                        return False
+                # Make sure Notify is initialized
+                if not Notify.is_initted():
+                    Notify.init("Preview Maker")
 
-                self._last_notification_message = message
-                self._last_notification_time = time.time()
+                # Rate limiting based on message content
+                current_time = time.time()
+                cooldown_period = (
+                    1  # Default 1 second cooldown between identical notifications
+                )
+
+                # For the Gemini API failure message, use a longer cooldown
+                if "Gemini API failed to provide a valid bounding box" in message:
+                    cooldown_period = (
+                        10  # 10 seconds between Gemini API failure notifications
+                    )
+
+                # Check if we've shown this message recently
+                if message in self._notification_timestamps:
+                    last_time = self._notification_timestamps[message]
+                    if current_time - last_time < cooldown_period:
+                        return False  # Skip this notification, it's too soon
+
+                # Update timestamp for this message
+                self._notification_timestamps[message] = current_time
 
                 # If we already have a notification, close it first
                 if self.notification is not None:
@@ -958,7 +972,7 @@ X-GNOME-UsesNotifications=true
             cr.line_to(prev_draw_x, prev_draw_y)
             cr.stroke()
 
-        # If debug mode is enabled, draw the API boundary box
+        # If debug mode is enabled, draw the API boundary box only if it's a real API response
         if self.debug_mode and hasattr(self, "gemini_box") and self.gemini_box:
             # Get the original bounding box coordinates from Gemini API
             ox1, oy1, ox2, oy2 = self.gemini_box
@@ -991,6 +1005,28 @@ X-GNOME-UsesNotifications=true
             cr.set_font_size(12)
             cr.move_to(box_x1 + 5, box_y1 - 5)
             cr.show_text("API Boundary")
+        elif self.debug_mode:
+            # Draw an error message when we don't have a valid boundary box but debug mode is on
+            cr.select_font_face("Sans", 0, 1)  # 1 = bold
+            cr.set_font_size(16)
+
+            # Draw text shadow
+            cr.set_source_rgba(0, 0, 0, 0.7)
+
+            # Create a semi-transparent background for the text
+            text = "Gemini API failed to provide a valid bounding box"
+            text_x = width / 2 - 220  # Approximate center
+            text_y = 30
+
+            # Text background
+            cr.set_source_rgba(0.8, 0, 0, 0.7)  # Red background
+            cr.rectangle(text_x - 5, text_y - 20, 440, 30)
+            cr.fill()
+
+            # Text
+            cr.set_source_rgba(1, 1, 1, 1)  # White text
+            cr.move_to(text_x, text_y)
+            cr.show_text(text)
 
     def on_image_click(self, gesture, n_press, x, y):
         """Handle click on the image."""
@@ -1174,8 +1210,31 @@ X-GNOME-UsesNotifications=true
             )
 
             # Store the raw boundary from Gemini for debug overlay
+            # Only store if we got a real response from the API (not a fallback)
             if raw_box:
                 self.gemini_box = raw_box
+                print("Received valid boundary box from Gemini API")
+                # Clear any previous API failure notification state
+                self._notification_timestamps.pop(
+                    "Gemini API failed to provide a valid bounding box", None
+                )
+            else:
+                # If we didn't get a raw_box, clear any previous box to avoid showing stale data
+                if hasattr(self, "gemini_box"):
+                    print("No valid boundary from Gemini API, clearing debug overlay")
+                    self.gemini_box = None
+
+                # Send a notification if debug mode is on - but only once per detection attempt
+                if hasattr(self, "debug_mode") and self.debug_mode:
+                    error_message = "Gemini API failed to provide a valid bounding box"
+                    print(error_message)
+                    # Use idle_add to ensure notification happens in the main thread
+                    GLib.idle_add(
+                        self.show_notification,
+                        error_message,
+                        5,  # Show for 5 seconds
+                        True,  # Use desktop notification
+                    )
 
             # Update the description in the UI if one was returned
             if description:
@@ -1220,7 +1279,21 @@ X-GNOME-UsesNotifications=true
 
             # Redraw the circle area
             GLib.idle_add(lambda: self.circle_area and self.circle_area.queue_draw())
-            GLib.idle_add(self.show_notification, "Detection complete.", 2, True)
+            # Update notification based on whether we got a valid boundary box from Gemini API
+            if raw_box:
+                GLib.idle_add(
+                    self.show_notification,
+                    "Detection complete - Gemini API successful.",
+                    2,
+                    True,
+                )
+            else:
+                GLib.idle_add(
+                    self.show_notification,
+                    "Detection complete - using fallback detection (centered selection).",
+                    3,
+                    True,
+                )
         except Exception as e:
             print(f"Error in detection thread: {e}")
             GLib.idle_add(self.show_notification, f"Error in detection: {e}", 5, True)
@@ -1254,9 +1327,61 @@ X-GNOME-UsesNotifications=true
             self.current_dir = os.path.dirname(self.current_image_path)
             print(f"Setting current directory to: {self.current_dir}")
 
-        self.show_notification("Applying changes...")
-        # Process the image with the selected points
-        self.process_image(self.current_image_path)
+        # Calculate the selection box based on current point and settings
+        interesting_area = self._calculate_selection_box()
+
+        if not interesting_area:
+            self._show_error("Failed to calculate selection box from points.")
+            return
+
+        # Determine if we have a valid gemini_box for debug overlay
+        show_debug_overlay = False
+        if self.debug_mode and hasattr(self, "gemini_box") and self.gemini_box:
+            show_debug_overlay = True
+            print("Using Gemini API boundary box in debug overlay")
+        elif self.debug_mode:
+            print("Debug mode is on but no valid Gemini API boundary box available")
+
+        # Create the processed image for display (with debug overlay if enabled and available)
+        self.processed_image_with_debug = image_processor.create_highlighted_image(
+            self.current_image,
+            interesting_area,
+            preview_center=self.selected_preview_point,
+            selection_ratio=self.selection_ratio,
+            zoom_factor=self.zoom_factor,
+            show_debug_overlay=show_debug_overlay,
+        )
+
+        # Create the processed image for saving (never with debug overlay)
+        self.processed_image = image_processor.create_highlighted_image(
+            self.current_image,
+            interesting_area,
+            preview_center=self.selected_preview_point,
+            selection_ratio=self.selection_ratio,
+            zoom_factor=self.zoom_factor,
+            show_debug_overlay=False,
+        )
+
+        # Update the preview if we have a result
+        if self.processed_image_with_debug and hasattr(self, "output_picture"):
+            # Convert PIL Image to GdkPixbuf
+            # For display, use the version with debug info if available
+            display_image = self.processed_image_with_debug
+            width, height = display_image.size
+
+            # Create an empty pixbuf of the right size
+            pixbuf = GdkPixbuf.Pixbuf.new(
+                GdkPixbuf.Colorspace.RGB, True, 8, width, height
+            )
+
+            # Convert the PIL image to bytes and load into the pixbuf
+            image_bytes = display_image.tobytes()
+            pixbuf.read_pixel_bytes().append(image_bytes)
+
+            # Set the pixbuf to the picture widget
+            self.output_picture.set_pixbuf(pixbuf)
+
+        self.show_notification("Changes applied")
 
     def _show_error(self, error_message):
         """Show an error message notification."""
@@ -1541,9 +1666,19 @@ X-GNOME-UsesNotifications=true
         thread.start()
 
     def _process_image_thread(self, image_path):
-        """Background thread for image processing."""
+        """Process an image in a background thread."""
         try:
-            # Load the image
+            GLib.idle_add(
+                self.show_notification,
+                f"Processing {os.path.basename(image_path)}...",
+                2,
+            )
+
+            # Store the current image path
+            self.current_image_path = image_path
+            self.current_dir = os.path.dirname(image_path)
+
+            # Open the image with PIL
             self.current_image = Image.open(image_path)
             print(f"Processing image: {image_path}")
             print(f"Current directory: {self.current_dir}")
@@ -1598,14 +1733,28 @@ X-GNOME-UsesNotifications=true
                 )
 
                 # Create a processed image with the highlight, passing the configurable parameters
+                # For display, we may want to show debug overlay
+                self.processed_image_with_debug = (
+                    image_processor.create_highlighted_image(
+                        self.current_image,
+                        interesting_area,
+                        preview_center=(preview_x, preview_y),
+                        selection_ratio=self.selection_ratio,
+                        zoom_factor=self.zoom_factor,
+                        show_debug_overlay=self.debug_mode and debug_box is not None,
+                    )
+                )
+
+                # For saving, we never want the debug overlay
                 self.processed_image = image_processor.create_highlighted_image(
                     self.current_image,
                     interesting_area,
                     preview_center=(preview_x, preview_y),
                     selection_ratio=self.selection_ratio,
                     zoom_factor=self.zoom_factor,
-                    show_debug_overlay=self.debug_mode and debug_box is not None,
+                    show_debug_overlay=False,  # Never show debug overlay in saved image
                 )
+
             else:
                 # Use Gemini API to identify interesting textile parts
                 print("No valid manual selection, using Gemini API")
@@ -1636,17 +1785,57 @@ X-GNOME-UsesNotifications=true
 
                 if raw_box:
                     print(f"Raw Gemini box before adjustments: {self.raw_gemini_box}")
+                    # Clear any previous API failure notification state
+                    self._notification_timestamps.pop(
+                        "Gemini API failed to provide a valid bounding box", None
+                    )
+                else:
+                    # Send a notification if debug mode is on and we didn't get a valid bounding box
+                    if hasattr(self, "debug_mode") and self.debug_mode:
+                        error_message = (
+                            "Gemini API failed to provide a valid bounding box"
+                        )
+                        print(error_message)
+                        # Use idle_add to ensure notification happens in the main thread
+                        GLib.idle_add(
+                            self.show_notification,
+                            error_message,
+                            5,  # Show for 5 seconds
+                            True,  # Use desktop notification
+                        )
+
                 if description:
                     print(f"Gemini description: {description}")
 
+                # Determine if we have a valid gemini_box for debug overlay
+                show_debug_overlay = False
+                if self.debug_mode and raw_box:
+                    show_debug_overlay = True
+                    print("Using Gemini API boundary box in debug overlay")
+                elif self.debug_mode:
+                    print(
+                        "Debug mode is on but no valid Gemini API boundary box available"
+                    )
+
                 # Create a processed image with the highlight - use original image to preserve quality
-                # Pass the configurable parameters
+                # For display, we may want to show debug overlay
+                self.processed_image_with_debug = (
+                    image_processor.create_highlighted_image(
+                        self.current_image,
+                        interesting_area,
+                        selection_ratio=self.selection_ratio,
+                        zoom_factor=self.zoom_factor,
+                        show_debug_overlay=show_debug_overlay,
+                    )
+                )
+
+                # For saving, we never want the debug overlay
                 self.processed_image = image_processor.create_highlighted_image(
                     self.current_image,
                     interesting_area,
                     selection_ratio=self.selection_ratio,
                     zoom_factor=self.zoom_factor,
-                    show_debug_overlay=self.debug_mode,
+                    show_debug_overlay=False,  # Never show debug overlay in saved image
                 )
 
             # Show notification about AI status
@@ -1674,7 +1863,7 @@ X-GNOME-UsesNotifications=true
 
             # Save the processed image
             output_path = image_processor.save_processed_image(
-                self.processed_image,
+                self.processed_image,  # Use the clean version without debug overlay for saving
                 image_path,
                 output_dir=PREVIEWS_DIR,
                 current_dir=self.current_dir,
@@ -1706,7 +1895,35 @@ X-GNOME-UsesNotifications=true
             GLib.idle_add(self._show_error, str(e))
 
     def _processing_complete(self):
-        """Called when image processing is complete."""
+        """Called when processing is complete to update the UI."""
+        # Enable any disabled buttons
+        if hasattr(self, "buttons"):
+            for button in self.buttons:
+                button.set_sensitive(True)
+
+        # Update the preview if we have a result
+        if self.processed_image and hasattr(self, "output_picture"):
+            # For display, use the version with debug info if available
+            display_image = (
+                self.processed_image_with_debug
+                if hasattr(self, "processed_image_with_debug")
+                and self.processed_image_with_debug
+                else self.processed_image
+            )
+            width, height = display_image.size
+
+            # Create an empty pixbuf of the right size
+            pixbuf = GdkPixbuf.Pixbuf.new(
+                GdkPixbuf.Colorspace.RGB, True, 8, width, height
+            )
+
+            # Convert the PIL image to bytes
+            image_bytes = display_image.tobytes()
+            pixbuf.read_pixel_bytes().append(image_bytes)
+
+            # Set the pixbuf to the picture widget
+            self.output_picture.set_pixbuf(pixbuf)
+
         # Reset processing state
         self.processing = False
 
