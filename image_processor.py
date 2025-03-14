@@ -24,6 +24,7 @@ def create_highlighted_image(
     preview_center=None,
     selection_ratio=DEFAULT_SELECTION_RATIO,
     zoom_factor=DEFAULT_ZOOM_FACTOR,
+    show_debug_overlay=False,
 ):
     """
     Create an image with a circular highlight and zoomed preview of the interesting area.
@@ -36,6 +37,7 @@ def create_highlighted_image(
         selection_ratio: The size of the selection circle as a ratio of the image's
         shortest dimension (default: 0.1 = 10%)
         zoom_factor: How much to zoom the preview (default: 3.0)
+        show_debug_overlay: Whether to draw the original bounding box as a debug overlay
 
     Returns:
         PIL Image: Processed image with highlight and zoomed preview
@@ -43,6 +45,9 @@ def create_highlighted_image(
     # Validate the interesting area coordinates
     x1, y1, x2, y2 = interesting_area
     width, height = original_image.size
+
+    # Store the original coordinates for debug overlay
+    original_box = (x1, y1, x2, y2)
 
     # Ensure coordinates are within image bounds
     x1 = max(0, min(x1, width - 1))
@@ -68,13 +73,22 @@ def create_highlighted_image(
 
     # Get the interesting area coordinates
     x1, y1, x2, y2 = interesting_area
-    center_x = (x1 + x2) // 2
-    center_y = (y1 + y2) // 2
+
+    # Use floating point division for more accurate center calculation
+    center_x = (x1 + x2) / 2
+    center_y = (y1 + y2) / 2
+
+    # Convert to integers for drawing functions at the end of calculations
+    center_x = int(center_x)
+    center_y = int(center_y)
 
     # Calculate the selection circle size based on the image dimensions
     shortest_dimension = min(width, height)
     highlight_diameter = int(shortest_dimension * selection_ratio)
-    highlight_radius = highlight_diameter // 2  # Radius for the selection circle
+    highlight_radius = highlight_diameter / 2  # Use floating-point division
+
+    # For drawing functions, we'll convert radius to integer where needed
+    int_radius = int(highlight_radius)
 
     # Create a transparent overlay for dark gray with transparency
     overlay = Image.new("RGBA", result.size, (0, 0, 0, 0))
@@ -83,8 +97,8 @@ def create_highlighted_image(
     # Draw a semi-transparent dark gray circle
     overlay_draw.ellipse(
         [
-            (center_x - highlight_radius, center_y - highlight_radius),
-            (center_x + highlight_radius, center_y + highlight_radius),
+            (center_x - int_radius, center_y - int_radius),
+            (center_x + int_radius, center_y + int_radius),
         ],
         fill=(50, 50, 50, 160),  # Dark gray with increased opacity
         outline=(255, 120, 0, 230),  # Orange outline to match the connecting line
@@ -93,6 +107,32 @@ def create_highlighted_image(
         ),  # Border width proportional to radius
     )
 
+    # If debug overlay is enabled, draw the original bounding box
+    if show_debug_overlay:
+        # Draw the original bounding box from Gemini in blue
+        ox1, oy1, ox2, oy2 = original_box
+        outline_width = max(
+            1, int(shortest_dimension * 0.003)
+        )  # Proportional to image size
+        overlay_draw.rectangle(
+            [(ox1, oy1), (ox2, oy2)],
+            fill=None,
+            outline=(0, 100, 255, 220),  # Blue, semi-transparent
+            width=outline_width,
+        )
+
+        # Add a small label for the debug box
+        text_bg_size = (90, 20)
+        text_bg = Image.new("RGBA", text_bg_size, (0, 100, 255, 180))
+        overlay.paste(text_bg, (ox1, max(0, oy1 - 20)), text_bg)
+
+        # Add text "API Boundary" next to the bounding box
+        overlay_draw.text(
+            (ox1 + 5, max(0, oy1 - 18)),
+            "API Boundary",
+            fill=(255, 255, 255, 255),  # White text
+        )
+
     # Print dimensions for debugging
     print(
         f"DEBUG: Circle diameter = {highlight_radius*2} pixels with proportional border"
@@ -100,6 +140,8 @@ def create_highlighted_image(
     print(
         f"DEBUG: Image dimensions = {width}x{height}, selection ratio = {selection_ratio}"
     )
+    if show_debug_overlay:
+        print(f"DEBUG: Original bounding box = {original_box}")
 
     # Apply a slight blur to the overlay for smoother edges
     overlay = overlay.filter(ImageFilter.GaussianBlur(radius=0.5))
@@ -108,7 +150,7 @@ def create_highlighted_image(
     result = Image.alpha_composite(result, overlay)
 
     # Create a zoomed view of the interesting part
-    zoom_radius = int(highlight_radius * zoom_factor)
+    zoom_radius = highlight_radius * zoom_factor  # Keep as float initially
 
     # Calculate the position for the zoomed preview
     # Place it in the corner that's furthest from the interesting area
@@ -135,30 +177,30 @@ def create_highlighted_image(
         # (not the preview center)
         crop_region = original_image.crop(
             (
-                max(0, center_x - highlight_radius),
-                max(0, center_y - highlight_radius),
-                min(width, center_x + highlight_radius),
-                min(height, center_y + highlight_radius),
+                max(0, center_x - int_radius),
+                max(0, center_y - int_radius),
+                min(width, center_x + int_radius),
+                min(height, center_y + int_radius),
             )
         )
 
         # The preview center determines where to place the zoomed preview
         # Calculate the position of the zoomed preview based on the preview center
-        zoom_size = zoom_radius * 2
+        zoom_size = int(zoom_radius * 2)  # Convert to int for image operations
         zoom_padding = int(
             max(10, shortest_dimension * 0.01)
         )  # Padding from the edge (proportional)
 
-        # Place the zoomed preview centered on the preview point
-        zoom_x = max(0, min(width - zoom_size, preview_x - zoom_size // 2))
-        zoom_y = max(0, min(height - zoom_size, preview_y - zoom_size // 2))
+        # Place the zoomed preview centered on the preview point using floating-point math
+        zoom_x = max(0, min(width - zoom_size, int(preview_x - zoom_size / 2)))
+        zoom_y = max(0, min(height - zoom_size, int(preview_y - zoom_size / 2)))
     else:
         crop_region = original_image.crop(
             (
-                max(0, center_x - highlight_radius),
-                max(0, center_y - highlight_radius),
-                min(width, center_x + highlight_radius),
-                min(height, center_y + highlight_radius),
+                max(0, center_x - int_radius),
+                max(0, center_y - int_radius),
+                min(width, center_x + int_radius),
+                min(height, center_y + int_radius),
             )
         )
 
@@ -179,7 +221,7 @@ def create_highlighted_image(
         _, _, corner_name = furthest_corner
 
         # Calculate the position of the zoomed preview
-        zoom_size = zoom_radius * 2
+        zoom_size = int(zoom_radius * 2)  # Convert to int for image operations
         zoom_padding = int(
             max(10, shortest_dimension * 0.01)
         )  # Padding from the edge (proportional)
@@ -273,7 +315,7 @@ def create_highlighted_image(
         result_draw.line(
             [
                 (center_x, center_y),
-                (zoom_x + zoom_size // 2, zoom_y + zoom_size // 2),
+                (int(zoom_x + zoom_size / 2), int(zoom_y + zoom_size / 2)),
             ],
             fill=(255, 120, 0, 255),  # ORANGE line
             width=line_width,
@@ -281,7 +323,10 @@ def create_highlighted_image(
     else:
         line_width = max(2, int(shortest_dimension * 0.003))  # Proportional line width
         result_draw.line(
-            [(center_x, center_y), (zoom_x + zoom_size // 2, zoom_y + zoom_size // 2)],
+            [
+                (center_x, center_y),
+                (int(zoom_x + zoom_size / 2), int(zoom_y + zoom_size / 2)),
+            ],
             fill=(255, 120, 0, 255),  # ORANGE line
             width=line_width,
         )
@@ -326,9 +371,13 @@ def save_debug_image(
     # Update the interesting area with validated coordinates
     interesting_area = (x1, y1, x2, y2)
 
-    # Get the center of the interesting area
-    center_x = (x1 + x2) // 2
-    center_y = (y1 + y2) // 2
+    # Get the center of the interesting area using floating point division
+    center_x = (x1 + x2) / 2
+    center_y = (y1 + y2) / 2
+
+    # Convert to integers at the end of calculation
+    center_x = int(center_x)
+    center_y = int(center_y)
 
     # Draw a big red dot with smooth edges - size proportional to image
     shortest_dimension = min(width, height)

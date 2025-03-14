@@ -49,19 +49,23 @@ else:
 
 def identify_interesting_textile(image, custom_prompt=None):
     """
-    Use Google Gemini AI to identify the most interesting textile part of the image.
+    Use Google Gemini AI to identify the most interesting area of the image.
 
     Args:
         image: PIL Image object
         custom_prompt: Optional custom prompt to use instead of the default
 
     Returns:
-        tuple: Coordinates (x1, y1, x2, y2) of the interesting area
+        tuple: (coordinates, raw_coordinates, description)
+            - coordinates: (x1, y1, x2, y2) of the interesting area
+            - raw_coordinates: original coordinates before adjustment or None
+            - description: text description of what was detected or None
     """
     if not AI_ENABLED:
         # If AI is not enabled, just return a default region in the center
         width, height = image.size
-        return (width // 4, height // 4, width * 3 // 4, height * 3 // 4)
+        center_box = (width // 4, height // 4, width * 3 // 4, height * 3 // 4)
+        return center_box, None, None  # No raw box or description in fallback mode
 
     try:
         # Resize image if too large to avoid API limits
@@ -88,11 +92,17 @@ def identify_interesting_textile(image, custom_prompt=None):
         # Use custom prompt if provided, otherwise use default
         if custom_prompt is None:
             prompt = (
-                "Please analyze this kimono image and identify the most interesting "
-                "textile pattern or detail. Return only the coordinates of a bounding "
-                "box around this area as normalized values between 0 and 1 in the format: "
-                "x1,y1,x2,y2 where x1,y1 is the top-left corner and x2,y2 is the "
-                "bottom-right corner."
+                "Please analyze this image and identify ONE SPECIFIC object or feature. "
+                "Find a SINGLE, DISTINCT element that is clearly defined and separate. "
+                "Create a tight bounding box ONLY around this specific element "
+                "(5-15% of image area).\n\n"
+                "Respond with TWO PARTS:\n"
+                "1. Coordinates as normalized values between 0 and 1: x1,y1,x2,y2 where "
+                "(x1,y1) is the top-left corner and (x2,y2) is the bottom-right corner.\n"
+                "2. A brief description (1-2 sentences) of what you identified and why it's interesting or visually notable.\n\n"
+                "Format your response as:\n"
+                "COORDS: x1,y1,x2,y2\n"
+                "DESCRIPTION: Your description here."
             )
         else:
             prompt = custom_prompt
@@ -102,18 +112,62 @@ def identify_interesting_textile(image, custom_prompt=None):
             [prompt, {"mime_type": "image/jpeg", "data": buffer.getvalue()}]
         )
 
-        # Parse the coordinates from the response
-        coords_text = response.text.strip()
-        print(f"Raw Gemini response: {coords_text}")
+        # Parse the response
+        response_text = response.text.strip()
+        print(f"Raw Gemini response: {response_text}")
 
-        # Extract just the coordinates if there's additional text
+        # Extract coordinates
         coords_match = re.search(
-            r"(\d+\.?\d*),(\d+\.?\d*),(\d+\.?\d*),(\d+\.?\d*)", coords_text
+            r"COORDS:\s*(\d+\.?\d*),(\d+\.?\d*),(\d+\.?\d*),(\d+\.?\d*)",
+            response_text,
+            re.IGNORECASE,
         )
+
+        # Extract description (everything after DESCRIPTION:)
+        description_match = re.search(
+            r"DESCRIPTION:\s*(.*(?:\n.*)*)", response_text, re.IGNORECASE | re.DOTALL
+        )
+
+        description = None
+        if description_match:
+            description = description_match.group(1).strip()
+            print(f"Extracted description: {description}")
+
+        # Fall back to the original pattern if the structured response fails
+        if not coords_match:
+            coords_match = re.search(
+                r"(\d+\.?\d*),(\d+\.?\d*),(\d+\.?\d*),(\d+\.?\d*)", response_text
+            )
+            # If we found coordinates but no structure, try to extract description as any text before/after coords
+            if coords_match and not description:
+                # Get everything except the coordinates as a potential description
+                coords_text = coords_match.group(0)
+                potential_description = response_text.replace(coords_text, "").strip()
+                if potential_description:
+                    description = potential_description
+                    print(f"Extracted unstructured description: {description}")
 
         if coords_match:
             # Parse the coordinates
             x1_pct, y1_pct, x2_pct, y2_pct = map(float, coords_match.groups())
+
+            # Log the raw normalized coordinates exactly as received from Gemini
+            print(
+                f"Raw normalized coordinates from Gemini: {x1_pct},{y1_pct},{x2_pct},{y2_pct}"
+            )
+
+            # Raw pixel coordinates before any adjustments
+            width, height = image.size
+            raw_x1 = int(x1_pct * width)
+            raw_y1 = int(y1_pct * height)
+            raw_x2 = int(x2_pct * width)
+            raw_y2 = int(y2_pct * height)
+            print(
+                f"Raw pixel coordinates before adjustments: ({raw_x1}, {raw_y1}, {raw_x2}, {raw_y2})"
+            )
+
+            # Store raw coordinates for debugging
+            raw_box = (raw_x1, raw_y1, raw_x2, raw_y2)
 
             # Normalize values to ensure they're between 0 and 1
             x1_pct = max(0.0, min(1.0, x1_pct))
@@ -128,41 +182,72 @@ def identify_interesting_textile(image, custom_prompt=None):
                 y1_pct, y2_pct = max(0.0, y1_pct - 0.1), min(1.0, y1_pct + 0.1)
 
             # Convert percentages to actual pixel coordinates
-            width, height = image.size
             x1 = int(x1_pct * width)
             y1 = int(y1_pct * height)
             x2 = int(x2_pct * width)
             y2 = int(y2_pct * height)
 
-            # Ensure minimum size for the region (at least 10% of the image)
-            min_width = width // 10
-            min_height = height // 10
+            print(f"Pixel coordinates after normalization: ({x1}, {y1}, {x2}, {y2})")
+
+            # Ensure minimum size for the region (at least 5% of the image)
+            min_width = width // 20
+            min_height = height // 20
 
             if x2 - x1 < min_width:
-                center_x = (x1 + x2) // 2
-                x1 = max(0, center_x - min_width // 2)
+                # Use floating point division for more accurate center
+                center_x = (x1 + x2) / 2
+                x1 = max(0, int(center_x - min_width / 2))
                 x2 = min(width, x1 + min_width)
 
             if y2 - y1 < min_height:
-                center_y = (y1 + y2) // 2
-                y1 = max(0, center_y - min_height // 2)
+                # Use floating point division for more accurate center
+                center_y = (y1 + y2) / 2
+                y1 = max(0, int(center_y - min_height / 2))
                 y2 = min(height, y1 + min_height)
 
+            # Ensure the selected area is not too large (max 15% of image area)
+            max_area = width * height * 0.15  # 15% of image area
+            area = (x2 - x1) * (y2 - y1)
+
+            if area > max_area:
+                # Scale down the box while keeping the center the same
+                # Use floating point division for more accurate center
+                center_x = (x1 + x2) / 2
+                center_y = (y1 + y2) / 2
+
+                # Calculate the scale factor to reduce to max area
+                scale_factor = (
+                    max_area / area
+                ) ** 0.5  # square root to apply to both dimensions
+
+                # Calculate new dimensions
+                new_width = int((x2 - x1) * scale_factor)
+                new_height = int((y2 - y1) * scale_factor)
+
+                # Apply to coordinates with precise centering
+                x1 = max(0, int(center_x - new_width / 2))
+                y1 = max(0, int(center_y - new_height / 2))
+                x2 = min(width, x1 + new_width)
+                y2 = min(height, y1 + new_height)
+
             print(f"Processed coordinates: ({x1}, {y1}, {x2}, {y2})")
-            return (x1, y1, x2, y2)
+            return (x1, y1, x2, y2), raw_box, description
 
         # If parsing fails, return a default region
         print("Failed to parse coordinates from Gemini response. Using default region.")
         width, height = image.size
-        return (width // 4, height // 4, width * 3 // 4, height * 3 // 4)
+        center_box = (width // 4, height // 4, width * 3 // 4, height * 3 // 4)
+        return center_box, None, None  # No raw box or description in fallback mode
 
     except (ValueError, TypeError, IndexError) as e:
         print(f"Error processing Gemini API response: {e}")
         # Return a default region on error
         width, height = image.size
-        return (width // 4, height // 4, width * 3 // 4, height * 3 // 4)
+        center_box = (width // 4, height // 4, width * 3 // 4, height * 3 // 4)
+        return center_box, None, None  # No raw box or description in fallback mode
     except Exception as e:
         print(f"Unexpected error calling Gemini API: {e}")
         # Return a default region on error
         width, height = image.size
-        return (width // 4, height // 4, width * 3 // 4, height * 3 // 4)
+        center_box = (width // 4, height // 4, width * 3 // 4, height * 3 // 4)
+        return center_box, None, None  # No raw box or description in fallback mode

@@ -38,8 +38,33 @@ except ImportError:
 # Create previews directory if it doesn't exist
 PREVIEWS_DIR = "previews"
 DEBUG_DIR = os.path.join(PREVIEWS_DIR, "debug")
+PROMPTS_DIR = "prompts"
+DEFAULT_PROMPT_FILE = os.path.join(PROMPTS_DIR, "gemini_detection.txt")
+DEFAULT_TARGET_TYPE = "textile pattern or detail"
+
 os.makedirs(PREVIEWS_DIR, exist_ok=True)
 os.makedirs(DEBUG_DIR, exist_ok=True)
+os.makedirs(PROMPTS_DIR, exist_ok=True)
+
+# Create default prompt file if it doesn't exist
+if not os.path.exists(DEFAULT_PROMPT_FILE):
+    with open(DEFAULT_PROMPT_FILE, "w", encoding="utf-8") as f:
+        f.write(
+            "Please analyze this image and identify the most interesting {target_type} area.\n\n"
+            "Look for areas with these characteristics:\n"
+            "- Clear visual focal points or points of interest\n"
+            "- Detailed patterns or textures\n"
+            "- Areas with high contrast or distinctive colors\n"
+            "- Unusual or unique elements\n"
+            "- Rich details that would benefit from magnification\n\n"
+            "Respond with TWO PARTS:\n"
+            "1. COORDS: Coordinates as normalized values between 0 and 1 in the format x1,y1,x2,y2\n"
+            "   where (x1,y1) is the top-left corner and (x2,y2) is the bottom-right corner.\n"
+            "2. DESCRIPTION: A brief description (1-2 sentences) of what you identified and why it's interesting.\n\n"
+            "Format your response EXACTLY as:\n"
+            "COORDS: x1,y1,x2,y2\n"
+            "DESCRIPTION: Your description here."
+        )
 
 
 class KimonoAnalyzer(Gtk.Application):
@@ -75,6 +100,10 @@ class KimonoAnalyzer(Gtk.Application):
         # Configurable parameters for circle sizes
         self.selection_ratio = 0.1  # 10% of shortest dimension
         self.zoom_factor = 3.0  # 3x zoom factor
+        # Debug mode flag
+        self.debug_mode = False
+        # Store the description from Gemini
+        self.gemini_description = None
 
     def on_activate(self, app):
         """Initialize the application window and UI components."""
@@ -375,19 +404,70 @@ class KimonoAnalyzer(Gtk.Application):
         image_frame.set_margin_bottom(12)
         vbox.append(image_frame)
 
-        # Get the default prompt from gemini_analyzer
-        default_prompt = (
-            "Please analyze this kimono image and identify the most interesting "
-            "textile pattern or detail. Return only the coordinates of a bounding "
-            "box around this area as normalized values between 0 and 1 in the format: "
-            "x1,y1,x2,y2 where x1,y1 is the top-left corner and x2,y2 is the bottom-right corner."
-        )
+        # Add a description display area
+        description_frame = Gtk.Frame()
+        description_frame.set_label("AI Description")
+
+        description_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        description_box.set_margin_top(8)
+        description_box.set_margin_bottom(8)
+        description_box.set_margin_start(8)
+        description_box.set_margin_end(8)
+
+        self.description_label = Gtk.Label()
+        self.description_label.set_wrap(True)
+        self.description_label.set_selectable(True)
+        self.description_label.set_xalign(0)  # Left align text
+        self.description_label.set_text("Run detection to see Gemini's description")
+        self.description_label.add_css_class("description-text")
+
+        description_box.append(self.description_label)
+        description_frame.set_child(description_box)
+        description_frame.set_margin_bottom(12)
+        vbox.append(description_frame)
+
+        # Get the default prompt from file
+        try:
+            with open(DEFAULT_PROMPT_FILE, "r", encoding="utf-8") as f:
+                default_prompt = f.read()
+        except FileNotFoundError:
+            # Fallback to a basic prompt if file doesn't exist
+            default_prompt = (
+                "Please analyze this image and identify the most interesting {target_type} area. "
+                "Return only the coordinates of a bounding box around this area as normalized values "
+                "between 0 and 1 in the format: x1,y1,x2,y2 where x1,y1 is the top-left corner and "
+                "x2,y2 is the bottom-right corner."
+            )
 
         # Create prompt customization section with improved styling
         prompt_section = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         prompt_section.set_margin_bottom(16)
 
-        prompt_header = Gtk.Label(label="Custom Gemini Prompt:")
+        # Add a section for target type
+        target_section = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        target_section.set_margin_bottom(8)
+
+        target_label = Gtk.Label(label="Target Type:")
+        target_label.set_halign(Gtk.Align.START)
+        target_label.set_margin_end(10)
+        target_section.append(target_label)
+
+        # Create an entry for target type with better styling
+        self.target_entry = Gtk.Entry()
+        self.target_entry.set_text(DEFAULT_TARGET_TYPE)
+        self.target_entry.set_placeholder_text(
+            "e.g. flower, button, specific symbol, small detail"
+        )
+        self.target_entry.set_tooltip_text(
+            "Enter a specific object or detail to look for - be as precise as possible.\n"
+            "Examples: 'floral emblem', 'geometric pattern', 'character', 'specific symbol'"
+        )
+        self.target_entry.set_hexpand(True)
+        target_section.append(self.target_entry)
+
+        prompt_section.append(target_section)
+
+        prompt_header = Gtk.Label(label="Custom Gemini Prompt Template:")
         prompt_header.set_halign(Gtk.Align.START)
         prompt_header.set_margin_bottom(4)
         prompt_header.add_css_class("heading")
@@ -409,6 +489,21 @@ class KimonoAnalyzer(Gtk.Application):
         prompt_scroll.set_margin_bottom(4)
         prompt_section.append(prompt_scroll)
 
+        # Add buttons to save or reset prompt
+        prompt_button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        prompt_button_box.set_halign(Gtk.Align.END)
+        prompt_button_box.set_margin_top(4)
+
+        reset_prompt_button = Gtk.Button(label="Reset to Default")
+        reset_prompt_button.connect("clicked", self.reset_prompt_to_default)
+
+        save_prompt_button = Gtk.Button(label="Save as Default")
+        save_prompt_button.connect("clicked", self.save_prompt_as_default)
+
+        prompt_button_box.append(reset_prompt_button)
+        prompt_button_box.append(save_prompt_button)
+        prompt_section.append(prompt_button_box)
+
         # Add a note about the required format with improved styling
         note_label = Gtk.Label()
         note_label.set_markup(
@@ -418,7 +513,61 @@ class KimonoAnalyzer(Gtk.Application):
         note_label.set_margin_top(4)
         prompt_section.append(note_label)
 
+        # Add a note about targeting precision
+        targeting_note = Gtk.Label()
+        targeting_note.set_markup(
+            "<small><i>For best results, specify a single, distinct object in 'Target Type' "
+            "rather than general categories</i></small>"
+        )
+        targeting_note.set_halign(Gtk.Align.START)
+        targeting_note.set_margin_top(2)
+        prompt_section.append(targeting_note)
+
         vbox.append(prompt_section)
+
+        # Add debug options section
+        debug_section = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        debug_section.set_margin_bottom(12)
+
+        # Add debug checkbox for showing the API boundary
+        self.debug_checkbox = Gtk.CheckButton()
+        self.debug_checkbox.set_label("Show API Boundary")
+        self.debug_checkbox.set_tooltip_text(
+            "Show the original boundary box returned by Gemini API"
+        )
+        self.debug_checkbox.set_active(self.debug_mode)
+        self.debug_checkbox.connect("toggled", self.on_debug_toggled)
+        debug_section.append(self.debug_checkbox)
+
+        # Add sizing controls
+        size_label = Gtk.Label(label="Selection Size:")
+        size_label.set_margin_start(20)
+        debug_section.append(size_label)
+
+        # Add a scale for adjusting the selection circle size
+        size_scale = Gtk.Scale.new_with_range(
+            Gtk.Orientation.HORIZONTAL, 0.05, 0.3, 0.01
+        )
+        size_scale.set_value(self.selection_ratio)
+        size_scale.set_size_request(150, -1)
+        size_scale.set_tooltip_text("Adjust the size of the selection circle")
+        size_scale.connect("value-changed", self.on_selection_size_changed)
+        debug_section.append(size_scale)
+
+        # Add zoom factor control
+        zoom_label = Gtk.Label(label="Zoom:")
+        zoom_label.set_margin_start(20)
+        debug_section.append(zoom_label)
+
+        # Add a scale for adjusting the zoom factor
+        zoom_scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 1.5, 5.0, 0.1)
+        zoom_scale.set_value(self.zoom_factor)
+        zoom_scale.set_size_request(150, -1)
+        zoom_scale.set_tooltip_text("Adjust the zoom factor")
+        zoom_scale.connect("value-changed", self.on_zoom_factor_changed)
+        debug_section.append(zoom_scale)
+
+        vbox.append(debug_section)
 
         # Add buttons with improved styling
         button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
@@ -428,7 +577,8 @@ class KimonoAnalyzer(Gtk.Application):
         # Add explanatory text on the left side of the button box
         help_text = Gtk.Label()
         help_text.set_markup(
-            "<small>Left click: Set preview point (blue circle)\nCtrl+Left click: Set magnification point (green circle)</small>"
+            "<small>Left click: Set preview point (blue circle)\n"
+            "Ctrl+Left click: Set magnification point (green circle)</small>"
         )
         help_text.set_halign(Gtk.Align.START)
         help_text.set_hexpand(True)
@@ -455,6 +605,10 @@ class KimonoAnalyzer(Gtk.Application):
             .heading {
                 font-weight: bold;
                 font-size: 15px;
+            }
+            .description-text {
+                font-size: 14px;
+                padding: 4px;
             }
             """
         )
@@ -520,6 +674,11 @@ class KimonoAnalyzer(Gtk.Application):
         cr.rectangle(x_offset, y_offset, image_display_width, image_display_height)
         cr.fill()
 
+        # Calculate the selection circle size based on the image dimensions
+        shortest_dimension = min(img_width, img_height)
+        highlight_diameter = int(shortest_dimension * self.selection_ratio)
+        highlight_radius = highlight_diameter / 2
+
         # Check if we have valid normalized points for the magnification circle
         if (
             self.selected_magnification_point_norm
@@ -540,9 +699,8 @@ class KimonoAnalyzer(Gtk.Application):
             # Draw the magnification circle (green)
             cr.set_source_rgba(0, 1, 0, 0.5)  # Green, semi-transparent
 
-            # Scale the radius based on viewport scale
-            # The baseline radius is 128 pixels at original image scale
-            circle_radius = 128 * scale_x
+            # Scale the radius based on viewport scale - use the configurable selection size
+            circle_radius = highlight_radius * scale_x
             cr.arc(draw_x, draw_y, circle_radius, 0, 2 * 3.14)
             cr.fill()
 
@@ -571,9 +729,9 @@ class KimonoAnalyzer(Gtk.Application):
             # Draw the preview circle (blue)
             cr.set_source_rgba(0, 0, 1, 0.5)  # Blue, semi-transparent
 
-            # Scale the radius based on viewport scale
-            # The baseline radius is 384 pixels at original image scale
-            circle_radius = 384 * scale_x
+            # Scale the radius based on viewport scale - use configurable zoom factor
+            # The preview circle radius is the highlight radius times the zoom factor
+            circle_radius = highlight_radius * self.zoom_factor * scale_x
             cr.arc(draw_x, draw_y, circle_radius, 0, 2 * 3.14)
             cr.fill()
 
@@ -605,6 +763,40 @@ class KimonoAnalyzer(Gtk.Application):
             cr.move_to(mag_draw_x, mag_draw_y)
             cr.line_to(prev_draw_x, prev_draw_y)
             cr.stroke()
+
+        # If debug mode is enabled, draw the API boundary box
+        if self.debug_mode and hasattr(self, "gemini_box") and self.gemini_box:
+            # Get the original bounding box coordinates from Gemini API
+            ox1, oy1, ox2, oy2 = self.gemini_box
+
+            # Convert to normalized coordinates
+            norm_ox1 = ox1 / img_width
+            norm_oy1 = oy1 / img_height
+            norm_ox2 = ox2 / img_width
+            norm_oy2 = oy2 / img_height
+
+            # Map to display coordinates
+            box_x1 = x_offset + (norm_ox1 * image_display_width)
+            box_y1 = y_offset + (norm_oy1 * image_display_height)
+            box_x2 = x_offset + (norm_ox2 * image_display_width)
+            box_y2 = y_offset + (norm_oy2 * image_display_height)
+
+            # Draw the boundary box
+            cr.set_source_rgba(0, 0.5, 1, 0.6)  # Blue, semi-transparent
+            cr.set_line_width(2.0)
+            cr.rectangle(box_x1, box_y1, box_x2 - box_x1, box_y2 - box_y1)
+            cr.stroke()
+
+            # Add a label
+            cr.set_source_rgba(0, 0.5, 1, 0.8)  # Brighter blue for text
+            cr.rectangle(box_x1, box_y1 - 20, 90, 20)
+            cr.fill()
+
+            cr.set_source_rgba(1, 1, 1, 1)  # White text
+            cr.select_font_face("Sans", 0, 0)
+            cr.set_font_size(12)
+            cr.move_to(box_x1 + 5, box_y1 - 5)
+            cr.show_text("API Boundary")
 
     def on_image_click(self, gesture, n_press, x, y):
         """Handle click on the image."""
@@ -687,6 +879,7 @@ class KimonoAnalyzer(Gtk.Application):
                     f"Magnification point selected: {self.selected_magnification_point}"
                 )
                 print(f"Normalized: {self.selected_magnification_point_norm}")
+
             elif button == 1:  # Left click
                 # Store both normalized and pixel coordinates
                 self.selected_preview_point_norm = (norm_x, norm_y)
@@ -703,6 +896,45 @@ class KimonoAnalyzer(Gtk.Application):
         widget = gesture.get_widget()
         widget.queue_draw()
 
+    def _calculate_selection_box(self):
+        """Calculate a bounding box for the current magnification point and selection size.
+        This is NOT the original API boundary box, but the current selection area.
+        """
+        if not self.current_image or not self.selected_magnification_point:
+            return None
+
+        # Get image dimensions
+        width, height = self.current_image.size
+        mag_x, mag_y = self.selected_magnification_point
+
+        # Calculate the selection circle radius based on image size
+        shortest_dimension = min(width, height)
+        selection_diameter = int(shortest_dimension * self.selection_ratio)
+        radius = selection_diameter / 2  # Use floating point division
+
+        # Calculate the bounding box coordinates - use precise floating point math
+        x1 = max(0, int(mag_x - radius))
+        y1 = max(0, int(mag_y - radius))
+        x2 = min(width, int(mag_x + radius))
+        y2 = min(height, int(mag_y + radius))
+
+        # Ensure the box has the correct dimensions
+        if x2 - x1 < selection_diameter:
+            # Adjust if we hit the edge - use floating point and convert to int
+            if x1 == 0:
+                x2 = min(width, int(x1 + selection_diameter))
+            else:
+                x1 = max(0, int(x2 - selection_diameter))
+
+        if y2 - y1 < selection_diameter:
+            # Adjust if we hit the edge - use floating point and convert to int
+            if y1 == 0:
+                y2 = min(height, int(y1 + selection_diameter))
+            else:
+                y1 = max(0, int(y2 - selection_diameter))
+
+        return (x1, y1, x2, y2)
+
     def rerun_detection(self, button):
         """Rerun Gemini detection."""
         self.show_notification("Rerunning detection...")
@@ -711,23 +943,77 @@ class KimonoAnalyzer(Gtk.Application):
 
         # Make sure we have an image and it's in RGB mode if it's RGBA
         if self.current_image:
-            if self.current_image.mode == "RGBA":
-                self.current_image = self.current_image.convert("RGB")
+            # Store the original mode to restore it later
+            original_mode = self.current_image.mode
 
-            # Get the custom prompt from the text entry if available
-            custom_prompt = None
+            # Create a copy for Gemini processing that may need to be RGB
+            image_for_gemini = self.current_image.copy()
+            if image_for_gemini.mode == "RGBA":
+                image_for_gemini = image_for_gemini.convert("RGB")
+
+            # Get the prompt template from the text entry
+            prompt_template = None
+            target_type = DEFAULT_TARGET_TYPE
+
             if hasattr(self, "prompt_entry") and self.prompt_entry:
                 buffer = self.prompt_entry.get_buffer()
                 start_iter = buffer.get_start_iter()
                 end_iter = buffer.get_end_iter()
-                custom_prompt = buffer.get_text(start_iter, end_iter, True)
-                if custom_prompt.strip() == "":
-                    custom_prompt = None
+                prompt_template = buffer.get_text(start_iter, end_iter, True)
+                if prompt_template.strip() == "":
+                    prompt_template = None
+
+            # Get the target type
+            if hasattr(self, "target_entry") and self.target_entry:
+                target_text = self.target_entry.get_text()
+                if target_text.strip():
+                    target_type = target_text.strip()
+
+            # Format the prompt with the target type
+            custom_prompt = None
+            if prompt_template:
+                try:
+                    custom_prompt = prompt_template.format(target_type=target_type)
+                    print(f"Formatted prompt with target type: {target_type}")
+                except KeyError:
+                    # If formatting fails, use the template as is
+                    custom_prompt = prompt_template
+                    print(
+                        "Warning: Prompt template doesn't contain {target_type} placeholder"
+                    )
+
+            print(f"Using prompt: {custom_prompt}")
 
             # Call the Gemini analyzer with the custom prompt
-            interesting_area = gemini_analyzer.identify_interesting_textile(
-                self.current_image, custom_prompt
+            interesting_area, raw_box, description = (
+                gemini_analyzer.identify_interesting_textile(
+                    image_for_gemini, custom_prompt
+                )
             )
+
+            # Store the ORIGINAL Gemini API boundary box for debug overlay
+            # This is different from the working bounding box used for the selection
+            self.gemini_box = interesting_area
+
+            # Also store the raw unprocessed box for more detailed debugging
+            self.raw_gemini_box = raw_box
+
+            # Store the description from Gemini
+            self.gemini_description = description
+
+            # Update the description label if we have a description
+            if hasattr(self, "description_label") and self.description_label:
+                if description:
+                    self.description_label.set_text(description)
+                    self.description_label.set_tooltip_text(description)
+                else:
+                    self.description_label.set_text("No description available")
+
+            print(f"Gemini API returned boundary box: {self.gemini_box}")
+            if raw_box:
+                print(f"Raw Gemini box before adjustments: {self.raw_gemini_box}")
+            if description:
+                print(f"Gemini description: {description}")
 
             # Show notification about AI status
             if not gemini_analyzer.AI_ENABLED:
@@ -739,15 +1025,34 @@ class KimonoAnalyzer(Gtk.Application):
             # Get image dimensions
             img_width, img_height = self.current_image.size
 
-            # Set the magnification point (green circle) at the center of the interesting area
-            # Ensure it's not too close to the edge (green circle radius is 128px)
-            mag_x = (interesting_area[0] + interesting_area[2]) // 2
-            mag_y = (interesting_area[1] + interesting_area[3]) // 2
+            # Calculate the area of the bounding box as a percentage of the image
+            box_width = interesting_area[2] - interesting_area[0]
+            box_height = interesting_area[3] - interesting_area[1]
+            box_area = box_width * box_height
+            image_area = img_width * img_height
+            area_percentage = (box_area / image_area) * 100
 
-            # Ensure magnification point is at least 128px from any edge
-            mag_radius = 128
-            mag_x = max(mag_radius, min(img_width - mag_radius, mag_x))
-            mag_y = max(mag_radius, min(img_height - mag_radius, mag_y))
+            print(f"Bounding box area: {area_percentage:.2f}% of image")
+
+            # Set the magnification point (green circle) at the center of the interesting area
+            # Use floating point division to get the exact center point
+            mag_x = (interesting_area[0] + interesting_area[2]) / 2
+            mag_y = (interesting_area[1] + interesting_area[3]) / 2
+
+            # Convert to int after all calculations to prevent accumulated rounding errors
+            mag_x = int(mag_x)
+            mag_y = int(mag_y)
+
+            # Calculate padding based on current selection size instead of using a fixed value
+            shortest_dimension = min(img_width, img_height)
+            selection_diameter = int(shortest_dimension * self.selection_ratio)
+            mag_radius = (
+                selection_diameter / 2
+            )  # Use the actual radius from selection size
+
+            # Ensure magnification point is not too close to any edge based on its actual size
+            mag_x = max(int(mag_radius), min(img_width - int(mag_radius), mag_x))
+            mag_y = max(int(mag_radius), min(img_height - int(mag_radius), mag_y))
 
             # Store both pixel coordinates and normalized coordinates
             self.selected_magnification_point = (mag_x, mag_y)
@@ -757,23 +1062,27 @@ class KimonoAnalyzer(Gtk.Application):
             norm_mag_y = mag_y / img_height
             self.selected_magnification_point_norm = (norm_mag_x, norm_mag_y)
 
-            # For the preview point (blue circle), we need more padding since its radius is 384px
-            preview_radius = 384
+            # For the preview point (blue circle), we need more padding since its radius is larger
+            # Calculate preview circle radius based on the selection size and zoom factor
+            preview_diameter = selection_diameter * self.zoom_factor
+            preview_radius = preview_diameter / 2  # Use floating point division
 
             # Calculate safe areas for the preview point
-            safe_left = preview_radius
-            safe_right = img_width - preview_radius
-            safe_top = preview_radius
-            safe_bottom = img_height - preview_radius
+            safe_left = int(preview_radius)
+            safe_right = img_width - int(preview_radius)
+            safe_top = int(preview_radius)
+            safe_bottom = img_height - int(preview_radius)
 
             # If the image is too small to fit the preview circle, adjust the radius
             if safe_right <= safe_left or safe_bottom <= safe_top:
                 # Image is too small, use a smaller radius
-                preview_radius = min(img_width, img_height) // 3
-                safe_left = preview_radius
-                safe_right = img_width - preview_radius
-                safe_top = preview_radius
-                safe_bottom = img_height - preview_radius
+                preview_radius = (
+                    min(img_width, img_height) / 3
+                )  # Use floating point division
+                safe_left = int(preview_radius)
+                safe_right = img_width - int(preview_radius)
+                safe_top = int(preview_radius)
+                safe_bottom = img_height - int(preview_radius)
 
             # Define potential preview points in the four corners within the safe area
             corners = [
@@ -974,34 +1283,27 @@ class KimonoAnalyzer(Gtk.Application):
                 print(f"Magnification point: ({mag_x}, {mag_y})")
                 print(f"Preview point: ({preview_x}, {preview_y})")
 
-                # Calculate the selection circle radius based on image size
-                shortest_dimension = min(width, height)
-                selection_diameter = int(shortest_dimension * self.selection_ratio)
-                radius = selection_diameter // 2
+                # Calculate the selection box based on current point and settings
+                interesting_area = self._calculate_selection_box()
+                # If calculation failed, fallback to something reasonable
+                if not interesting_area:
+                    # Calculate a reasonable bounding box
+                    shortest_dimension = min(width, height)
+                    selection_diameter = int(shortest_dimension * self.selection_ratio)
+                    radius = selection_diameter / 2
+                    x1 = max(0, mag_x - radius)
+                    y1 = max(0, mag_y - radius)
+                    x2 = min(width, mag_x + radius)
+                    y2 = min(height, mag_y + radius)
+                    interesting_area = (x1, y1, x2, y2)
 
-                # Calculate the bounding box coordinates
-                x1 = max(0, mag_x - radius)
-                y1 = max(0, mag_y - radius)
-                x2 = min(width, mag_x + radius)
-                y2 = min(height, mag_y + radius)
-
-                # Ensure the box has the correct dimensions
-                if x2 - x1 < 2 * radius:
-                    # Adjust if we hit the edge
-                    if x1 == 0:
-                        x2 = min(width, x1 + 2 * radius)
-                    else:
-                        x1 = max(0, x2 - 2 * radius)
-
-                if y2 - y1 < 2 * radius:
-                    # Adjust if we hit the edge
-                    if y1 == 0:
-                        y2 = min(height, y1 + 2 * radius)
-                    else:
-                        y1 = max(0, y2 - 2 * radius)
-
-                interesting_area = (x1, y1, x2, y2)
                 print(f"Using manually selected area: {interesting_area}")
+
+                # For the debug overlay, we'll use the actual Gemini box if available
+                # or the calculated box if not
+                debug_box = (
+                    self.gemini_box if hasattr(self, "gemini_box") else interesting_area
+                )
 
                 # Create a processed image with the highlight, passing the configurable parameters
                 self.processed_image = image_processor.create_highlighted_image(
@@ -1010,10 +1312,11 @@ class KimonoAnalyzer(Gtk.Application):
                     preview_center=(preview_x, preview_y),
                     selection_ratio=self.selection_ratio,
                     zoom_factor=self.zoom_factor,
+                    show_debug_overlay=self.debug_mode and debug_box is not None,
                 )
             else:
                 # Use Gemini AI to identify interesting textile parts
-                print("No valid manual selection, using Gemini AI")
+                print("No valid manual selection, using Gemini API")
 
                 # For Gemini API, we need to make a copy that might need RGB conversion
                 gemini_image = self.current_image
@@ -1021,9 +1324,28 @@ class KimonoAnalyzer(Gtk.Application):
                     # Only convert the copy to RGB for the API
                     gemini_image = gemini_image.copy().convert("RGB")
 
-                interesting_area = gemini_analyzer.identify_interesting_textile(
-                    gemini_image
+                interesting_area, raw_box, description = (
+                    gemini_analyzer.identify_interesting_textile(gemini_image)
                 )
+
+                # Store the ORIGINAL Gemini API boundary box for debug overlay
+                self.gemini_box = interesting_area
+
+                # Also store the raw unprocessed box for more detailed debugging
+                self.raw_gemini_box = raw_box
+
+                # Store the description
+                self.gemini_description = description
+
+                # Update the description in the UI if we're in a manual mode window
+                # (needs to be done in the main thread)
+                if description:
+                    GLib.idle_add(self._update_description_in_ui, description)
+
+                if raw_box:
+                    print(f"Raw Gemini box before adjustments: {self.raw_gemini_box}")
+                if description:
+                    print(f"Gemini description: {description}")
 
                 # Create a processed image with the highlight - use original image to preserve quality
                 # Pass the configurable parameters
@@ -1032,6 +1354,7 @@ class KimonoAnalyzer(Gtk.Application):
                     interesting_area,
                     selection_ratio=self.selection_ratio,
                     zoom_factor=self.zoom_factor,
+                    show_debug_overlay=self.debug_mode,
                 )
 
             # Show notification about AI status
@@ -1110,6 +1433,76 @@ class KimonoAnalyzer(Gtk.Application):
             "To enable AI features, run: pip install google-generativeai", 10
         )
         return False  # Don't repeat
+
+    def on_debug_toggled(self, checkbox):
+        """Handle toggling of the debug checkbox."""
+        self.debug_mode = checkbox.get_active()
+        print(f"Debug checkbox toggled - debug mode set to: {self.debug_mode}")
+
+        # Just redraw the overlay immediately if we have points set
+        if self.circle_area:
+            self.circle_area.queue_draw()
+
+        # Reprocess the image with new setting if we have a magnification point set
+        if (
+            hasattr(self, "selected_magnification_point")
+            and self.selected_magnification_point
+            and self.selected_magnification_point[0] >= 0
+            and self.selected_magnification_point[1] >= 0
+        ):
+            self.apply_manual_changes(None)
+
+    def on_selection_size_changed(self, scale):
+        """Handle changes to the selection size slider."""
+        self.selection_ratio = scale.get_value()
+        print(f"Selection size ratio set to: {self.selection_ratio}")
+        # Update the display immediately
+        if self.circle_area:
+            self.circle_area.queue_draw()
+
+    def on_zoom_factor_changed(self, scale):
+        """Handle changes to the zoom factor slider."""
+        self.zoom_factor = scale.get_value()
+        print(f"Zoom factor set to: {self.zoom_factor}")
+        # Update the display immediately
+        if self.circle_area:
+            self.circle_area.queue_draw()
+
+    def reset_prompt_to_default(self, button):
+        """Reset the prompt to the default one from file."""
+        try:
+            with open(DEFAULT_PROMPT_FILE, "r", encoding="utf-8") as f:
+                default_prompt = f.read()
+                if self.prompt_entry:
+                    self.prompt_entry.get_buffer().set_text(default_prompt)
+            self.show_notification("Prompt reset to default")
+        except FileNotFoundError:
+            self.show_notification("Default prompt file not found")
+
+    def save_prompt_as_default(self, button):
+        """Save the current prompt as the default one."""
+        if hasattr(self, "prompt_entry") and self.prompt_entry:
+            buffer = self.prompt_entry.get_buffer()
+            start_iter = buffer.get_start_iter()
+            end_iter = buffer.get_end_iter()
+            prompt_text = buffer.get_text(start_iter, end_iter, True)
+
+            if prompt_text.strip():
+                try:
+                    with open(DEFAULT_PROMPT_FILE, "w", encoding="utf-8") as f:
+                        f.write(prompt_text)
+                    self.show_notification("Prompt saved as default")
+                except Exception as e:
+                    self.show_notification(f"Error saving prompt: {e}")
+            else:
+                self.show_notification("Prompt is empty, not saving")
+
+    def _update_description_in_ui(self, description):
+        """Update the description label in the UI (called from the main thread)."""
+        if hasattr(self, "description_label") and self.description_label:
+            self.description_label.set_text(description)
+            self.description_label.set_tooltip_text(description)
+        return False  # For GLib.idle_add
 
 
 def main():
