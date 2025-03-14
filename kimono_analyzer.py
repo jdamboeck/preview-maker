@@ -459,31 +459,21 @@ class KimonoAnalyzer(Gtk.Application):
         description_frame.set_child(description_scroll)
         controls_box.append(description_frame)
 
-        # Get the default prompt from file
-        try:
-            with open(DEFAULT_PROMPT_FILE, "r", encoding="utf-8") as f:
-                default_prompt = f.read()
-        except FileNotFoundError:
-            # Fallback to a basic prompt if file doesn't exist
-            default_prompt = (
-                "Please analyze this image and identify the most interesting {target_type} area. "
-                "Return only the coordinates of a bounding box around this area as normalized values "
-                "between 0 and 1 in the format: x1,y1,x2,y2 where x1,y1 is the top-left corner and "
-                "x2,y2 is the bottom-right corner."
-            )
+        # Add prompt section with a large text area for customization
+        prompt_section = Gtk.Frame()
+        prompt_section.set_label("Detection Prompt")
+        prompt_section.set_margin_top(16)
 
-        # Create prompt customization section with improved styling
-        prompt_section = Gtk.Box(
-            orientation=Gtk.Orientation.VERTICAL, spacing=12
-        )  # Increased spacing
-        prompt_section.set_margin_bottom(20)  # Increased margin
-        prompt_section.set_vexpand(True)  # Allow it to expand vertically to fill space
+        # Create box for prompt controls
+        prompt_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        prompt_box.set_margin_start(12)
+        prompt_box.set_margin_end(12)
+        prompt_box.set_margin_top(12)
+        prompt_box.set_margin_bottom(12)
 
         # Add a section for target type
-        target_section = Gtk.Box(
-            orientation=Gtk.Orientation.HORIZONTAL, spacing=10
-        )  # Increased spacing
-        target_section.set_margin_bottom(12)  # Increased margin
+        target_section = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        target_section.set_margin_bottom(12)
 
         target_label = Gtk.Label(label="Target Type:")
         target_label.set_halign(Gtk.Align.START)
@@ -509,55 +499,13 @@ class KimonoAnalyzer(Gtk.Application):
         rerun_button.set_margin_start(8)
         target_section.append(rerun_button)
 
-        prompt_section.append(target_section)
+        prompt_box.append(target_section)
 
-        prompt_header = Gtk.Label(label="Custom Gemini Prompt Template:")
-        prompt_header.set_halign(Gtk.Align.START)
-        prompt_header.set_margin_bottom(4)
-        prompt_header.add_css_class("heading")
-        prompt_section.append(prompt_header)
-
-        # Create a text entry for the prompt with better styling
-        self.prompt_entry = Gtk.TextView()
-        self.prompt_entry.set_wrap_mode(Gtk.WrapMode.WORD)
-        self.prompt_entry.get_buffer().set_text(default_prompt)
-        self.prompt_entry.set_top_margin(12)
-        self.prompt_entry.set_bottom_margin(12)
-        self.prompt_entry.set_left_margin(12)
-        self.prompt_entry.set_right_margin(12)
-        self.prompt_entry.add_css_class("prompt-text")  # Add class for styling
-
-        # Add scrolling for the text entry with improved styling
-        prompt_scroll = Gtk.ScrolledWindow()
-        prompt_scroll.set_min_content_height(150)  # Taller text area
-        prompt_scroll.set_vexpand(True)  # Let the scroll area expand vertically
-        prompt_scroll.set_child(self.prompt_entry)
-        prompt_scroll.set_margin_bottom(8)
-        prompt_section.append(prompt_scroll)
-
-        # Add buttons to save or reset prompt
-        prompt_button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        prompt_button_box.set_halign(Gtk.Align.END)
-        prompt_button_box.set_margin_top(4)
-
-        reset_prompt_button = Gtk.Button(label="Reset to Default")
-        reset_prompt_button.connect("clicked", self.reset_prompt_to_default)
-
-        save_prompt_button = Gtk.Button(label="Save as Default")
-        save_prompt_button.connect("clicked", self.save_prompt_as_default)
-
-        prompt_button_box.append(reset_prompt_button)
-        prompt_button_box.append(save_prompt_button)
-        prompt_section.append(prompt_button_box)
-
-        # Add a note about the required format with improved styling
-        note_label = Gtk.Label()
-        note_label.set_markup(
-            "<small>Note: Response must include coordinates in format: x1,y1,x2,y2</small>"
-        )
-        note_label.set_halign(Gtk.Align.START)
-        note_label.set_margin_top(4)
-        prompt_section.append(note_label)
+        # Add an advanced settings button for API debug and custom prompt
+        advanced_button = Gtk.Button.new_with_label("Advanced Settings")
+        advanced_button.set_halign(Gtk.Align.END)
+        advanced_button.connect("clicked", self.show_advanced_settings)
+        prompt_box.append(advanced_button)
 
         # Add a note about targeting precision
         targeting_note = Gtk.Label()
@@ -566,31 +514,29 @@ class KimonoAnalyzer(Gtk.Application):
             "rather than general categories</i></small>"
         )
         targeting_note.set_halign(Gtk.Align.START)
-        targeting_note.set_margin_top(2)
-        prompt_section.append(targeting_note)
+        targeting_note.set_margin_top(4)
+        prompt_box.append(targeting_note)
 
+        prompt_section.set_child(prompt_box)
         controls_box.append(prompt_section)
+
+        # Get the default prompt from file for use in detection
+        try:
+            with open(DEFAULT_PROMPT_FILE, "r", encoding="utf-8") as f:
+                self.default_prompt = f.read()
+        except FileNotFoundError:
+            # Fallback to a basic prompt if file doesn't exist
+            self.default_prompt = (
+                "Please analyze this image and identify the most interesting {target_type} area. "
+                "Return coordinates of a bounding box as normalized values between 0 and 1 "
+                "in the format: x1,y1,x2,y2 where x1,y1 is the top-left corner."
+            )
 
         # Add debug options section
         debug_section = Gtk.Box(
             orientation=Gtk.Orientation.VERTICAL, spacing=12
         )  # Increased spacing
         debug_section.set_margin_bottom(16)  # Increased margin
-
-        # Add a horizontal box for the debug checkbox and sliders
-        debug_controls = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-
-        # Add debug checkbox for showing the API boundary
-        self.debug_checkbox = Gtk.CheckButton()
-        self.debug_checkbox.set_label("Show API Boundary")
-        self.debug_checkbox.set_tooltip_text(
-            "Show the original boundary box returned by Gemini API"
-        )
-        self.debug_checkbox.set_active(self.debug_mode)
-        self.debug_checkbox.connect("toggled", self.on_debug_toggled)
-        debug_controls.append(self.debug_checkbox)
-
-        debug_section.append(debug_controls)
 
         # Add a horizontal box for size controls
         size_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
@@ -780,9 +726,7 @@ class KimonoAnalyzer(Gtk.Application):
         if (
             self.selected_preview_point_norm
             and self.selected_preview_point_norm[0] >= 0
-            and self.selected_preview_point_norm[0] <= 1
             and self.selected_preview_point_norm[1] >= 0
-            and self.selected_preview_point_norm[1] <= 1
         ):
             # Convert normalized coordinates to viewport coordinates
             norm_x, norm_y = self.selected_preview_point_norm
@@ -1018,48 +962,33 @@ class KimonoAnalyzer(Gtk.Application):
             if image_for_gemini.mode == "RGBA":
                 image_for_gemini = image_for_gemini.convert("RGB")
 
-            # Get the prompt template from the text entry
-            prompt_template = None
-            target_type = DEFAULT_TARGET_TYPE
-
-            if hasattr(self, "prompt_entry") and self.prompt_entry:
-                buffer = self.prompt_entry.get_buffer()
-                start_iter = buffer.get_start_iter()
-                end_iter = buffer.get_end_iter()
-                prompt_template = buffer.get_text(start_iter, end_iter, True)
-                if prompt_template.strip() == "":
-                    prompt_template = None
-
             # Get the target type
+            target_type = DEFAULT_TARGET_TYPE
             if hasattr(self, "target_entry") and self.target_entry:
                 target_text = self.target_entry.get_text()
                 if target_text.strip():
                     target_type = target_text.strip()
 
-            # Format the prompt with the target type
-            custom_prompt = None
-            if prompt_template:
-                try:
-                    custom_prompt = prompt_template.format(target_type=target_type)
-                    print(f"Formatted prompt with target type: {target_type}")
-                except KeyError:
-                    # If formatting fails, use the template as is
-                    custom_prompt = prompt_template
-                    print(
-                        "Warning: Prompt template doesn't contain {target_type} placeholder"
-                    )
-
-            print(f"Using prompt: {custom_prompt}")
+            # Format the prompt template with the target type
+            try:
+                formatted_prompt = self.default_prompt.format(target_type=target_type)
+                print(f"Formatted prompt with target type: {target_type}")
+                print(f"Using prompt: {formatted_prompt}")
+            except KeyError:
+                # If formatting fails, use the template as is
+                formatted_prompt = self.default_prompt
+                print(
+                    "Warning: Prompt template doesn't contain {target_type} placeholder"
+                )
 
             # Call the Gemini analyzer with the custom prompt
             interesting_area, raw_box, description = (
                 gemini_analyzer.identify_interesting_textile(
-                    image_for_gemini, custom_prompt
+                    image_for_gemini, custom_prompt=formatted_prompt
                 )
             )
 
             # Store the ORIGINAL Gemini API boundary box for debug overlay
-            # This is different from the working bounding box used for the selection
             self.gemini_box = interesting_area
 
             # Also store the raw unprocessed box for more detailed debugging
@@ -1232,254 +1161,6 @@ class KimonoAnalyzer(Gtk.Application):
         # Process the image with the selected points
         self.process_image(self.current_image_path)
 
-    def process_dropped_file(self, file):
-        """Process a dropped file or directory."""
-        file_path = file.get_path()
-        if not file_path:
-            self.show_notification("Invalid file")
-            return False
-
-        # Remember the directory of the dropped file/folder
-        if os.path.isdir(file_path):
-            self.current_dir = file_path
-        else:
-            self.current_dir = os.path.dirname(file_path)
-
-        # Clear any existing image queue
-        self.image_queue = []
-
-        # Check if it's a directory or a file
-        if os.path.isdir(file_path):
-            # Directory dropped, look for image files
-            image_extensions = [".jpg", ".jpeg", ".png", ".bmp", ".gif"]
-
-            for root, _, files in os.walk(file_path):
-                for file_name in files:
-                    ext = os.path.splitext(file_name)[1].lower()
-                    if ext in image_extensions:
-                        self.image_queue.append(os.path.join(root, file_name))
-
-            if not self.image_queue:
-                self.show_notification("No images found in directory")
-                return False
-
-            # Start processing the first image
-            count = len(self.image_queue)
-            self.show_notification(f"Processing {count} images...")
-
-            # Setup progress bar
-            if self.progress_bar:
-                self.progress_bar.set_visible(True)
-                self.progress_bar.set_fraction(0)
-
-            self.process_next_image()
-            return True
-
-            # Single file dropped, check if it's an image
-            ext = os.path.splitext(file_path)[1].lower()
-            image_extensions = [".jpg", ".jpeg", ".png", ".bmp", ".gif"]
-
-            if ext in image_extensions:
-                self.image_queue.append(file_path)
-            self.show_notification("Processing image...")
-            self.process_next_image()
-            return True
-
-        self.show_notification("The file is not an image")
-        return False
-
-    def process_next_image(self):
-        """Process the next image in the queue."""
-        if not self.image_queue:
-            self.show_notification("All images processed")
-            if self.progress_bar:
-                self.progress_bar.set_visible(False)
-            return
-
-        # Get the next image path
-        image_path = self.image_queue.pop(0)
-        self.current_image_path = image_path
-        self.process_image(image_path)
-
-        # Update progress bar
-        total = len(self.image_queue) + 1  # +1 for the current image
-        progress = 1 - (len(self.image_queue) / total)
-        if self.progress_bar:
-            self.progress_bar.set_fraction(progress)
-
-    def process_image(self, image_path):
-        """Start processing the image in a separate thread."""
-        # Mark that we're processing
-        self.processing = True
-        self.show_notification(f"Processing {os.path.basename(image_path)}...")
-
-        # Load the image in a background thread
-        thread = threading.Thread(target=self._process_image_thread, args=(image_path,))
-        thread.daemon = True
-        thread.start()
-
-    def _process_image_thread(self, image_path):
-        """Background thread for image processing."""
-        try:
-            # Load the image
-            self.current_image = Image.open(image_path)
-            print(f"Processing image: {image_path}")
-            print(f"Current directory: {self.current_dir}")
-
-            width, height = self.current_image.size
-            print(f"Image dimensions: {width}x{height}")
-
-            # Keep RGBA mode when possible - only convert to RGB when sending to Gemini API
-            # We'll use a copy for the Gemini API to avoid modifying the original
-
-            # Check if we have manually selected points
-            if (
-                hasattr(self, "selected_magnification_point")
-                and self.selected_magnification_point
-                and self.selected_magnification_point[0] >= 0
-                and self.selected_magnification_point[1] >= 0
-            ):
-                # Use manually selected points
-                mag_x, mag_y = self.selected_magnification_point
-                preview_x, preview_y = (
-                    self.selected_preview_point
-                    if self.selected_preview_point
-                    else (mag_x + 128, mag_y + 128)
-                )
-
-                print(f"Magnification point: ({mag_x}, {mag_y})")
-                print(f"Preview point: ({preview_x}, {preview_y})")
-
-                # Calculate the selection box based on current point and settings
-                interesting_area = self._calculate_selection_box()
-                # If calculation failed, fallback to something reasonable
-                if not interesting_area:
-                    # Calculate a reasonable bounding box
-                    shortest_dimension = min(width, height)
-                    selection_diameter = int(shortest_dimension * self.selection_ratio)
-                    radius = selection_diameter / 2
-                    x1 = max(0, mag_x - radius)
-                    y1 = max(0, mag_y - radius)
-                    x2 = min(width, mag_x + radius)
-                    y2 = min(height, mag_y + radius)
-                    interesting_area = (x1, y1, x2, y2)
-
-                print(f"Using manually selected area: {interesting_area}")
-
-                # For the debug overlay, we'll use the actual Gemini box if available
-                # or the calculated box if not
-                debug_box = (
-                    self.gemini_box if hasattr(self, "gemini_box") else interesting_area
-                )
-
-                # Create a processed image with the highlight, passing the configurable parameters
-                self.processed_image = image_processor.create_highlighted_image(
-                    self.current_image,
-                    interesting_area,
-                    preview_center=(preview_x, preview_y),
-                    selection_ratio=self.selection_ratio,
-                    zoom_factor=self.zoom_factor,
-                    show_debug_overlay=self.debug_mode and debug_box is not None,
-                )
-            else:
-                # Use Gemini AI to identify interesting textile parts
-                print("No valid manual selection, using Gemini API")
-
-                # For Gemini API, we need to make a copy that might need RGB conversion
-                gemini_image = self.current_image
-                if gemini_image.mode == "RGBA":
-                    # Only convert the copy to RGB for the API
-                    gemini_image = gemini_image.copy().convert("RGB")
-
-                interesting_area, raw_box, description = (
-                    gemini_analyzer.identify_interesting_textile(gemini_image)
-                )
-
-                # Store the ORIGINAL Gemini API boundary box for debug overlay
-                self.gemini_box = interesting_area
-
-                # Also store the raw unprocessed box for more detailed debugging
-                self.raw_gemini_box = raw_box
-
-                # Store the description
-                self.gemini_description = description
-
-                # Update the description in the UI if we're in a manual mode window
-                # (needs to be done in the main thread)
-                if description:
-                    GLib.idle_add(self._update_description_in_ui, description)
-
-                if raw_box:
-                    print(f"Raw Gemini box before adjustments: {self.raw_gemini_box}")
-                if description:
-                    print(f"Gemini description: {description}")
-
-                # Create a processed image with the highlight - use original image to preserve quality
-                # Pass the configurable parameters
-                self.processed_image = image_processor.create_highlighted_image(
-                    self.current_image,
-                    interesting_area,
-                    selection_ratio=self.selection_ratio,
-                    zoom_factor=self.zoom_factor,
-                    show_debug_overlay=self.debug_mode,
-                )
-
-            # Show notification about AI status
-            if not gemini_analyzer.AI_ENABLED:
-                GLib.idle_add(
-                    self.show_notification,
-                    "Using fallback mode (no Gemini AI). Install google-generativeai package for AI features.",
-                    5,
-                )
-
-            # Save debug image with red dot at the interesting spot
-            debug_path = image_processor.save_debug_image(
-                self.current_image,
-                interesting_area,
-                image_path,
-                debug_dir=DEBUG_DIR,
-                current_dir=self.current_dir,
-            )
-            print(f"Debug image saved to: {debug_path}")
-
-            # Save the processed image
-            output_path = image_processor.save_processed_image(
-                self.processed_image,
-                image_path,
-                output_dir=PREVIEWS_DIR,
-                current_dir=self.current_dir,
-            )
-            print(f"Processed image saved to: {output_path}")
-
-            # Update the UI on the main thread
-            GLib.idle_add(self._processing_complete)
-
-        except Exception as e:
-            GLib.idle_add(self._show_error, str(e))
-
-    def _processing_complete(self):
-        """Called when image processing is complete."""
-        # Reset processing state
-        self.processing = False
-
-        # Update progress bar
-        if self.image_queue:
-            total = len(self.image_queue) + 1  # +1 for the current image
-            progress = 1 - (len(self.image_queue) / total)
-            if self.progress_bar:
-                self.progress_bar.set_fraction(progress)
-
-            # Process the next image
-            self.process_next_image()
-        else:
-            if self.progress_bar:
-                self.progress_bar.set_visible(False)
-            self.show_notification("All images processed")
-
-        if self.spinner:
-            self.spinner.stop()
-        return False  # Important for GLib.idle_add
-
     def _show_error(self, error_message):
         """Show an error message notification."""
         self.show_notification(f"Error: {error_message}")
@@ -1570,6 +1251,482 @@ class KimonoAnalyzer(Gtk.Application):
             self.description_label.set_text(description)
             self.description_label.set_tooltip_text(description)
         return False  # For GLib.idle_add
+
+    def show_advanced_settings(self, button):
+        """Open a popup window with advanced settings like API debug and custom prompt options."""
+        # Create a new dialog window
+        dialog = Gtk.Window()
+        dialog.set_title("Advanced Settings")
+        dialog.set_default_size(600, 500)
+        dialog.set_modal(True)  # Makes it a modal dialog
+        dialog.set_transient_for(self.window)  # Set parent window
+
+        # Create a vertical box for all content
+        content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
+        content_box.set_margin_start(16)
+        content_box.set_margin_end(16)
+        content_box.set_margin_top(16)
+        content_box.set_margin_bottom(16)
+
+        # Create a notebook (tabbed interface)
+        notebook = Gtk.Notebook()
+        notebook.set_vexpand(True)
+
+        # --- API Debug Tab ---
+        api_debug_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        api_debug_box.set_margin_start(12)
+        api_debug_box.set_margin_end(12)
+        api_debug_box.set_margin_top(12)
+        api_debug_box.set_margin_bottom(12)
+
+        # Add API debug information
+        api_info_label = Gtk.Label()
+        api_info_label.set_markup("<b>API Information</b>")
+        api_info_label.set_halign(Gtk.Align.START)
+        api_debug_box.append(api_info_label)
+
+        # Add debug checkbox for showing the API boundary
+        debug_checkbox_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        debug_checkbox_box.set_margin_top(12)
+        debug_checkbox_box.set_margin_bottom(12)
+
+        self.debug_checkbox = Gtk.CheckButton()
+        self.debug_checkbox.set_label("Show API Boundary")
+        self.debug_checkbox.set_tooltip_text(
+            "Show the original boundary box returned by Gemini API"
+        )
+        self.debug_checkbox.set_active(self.debug_mode)
+        self.debug_checkbox.connect("toggled", self.on_debug_toggled)
+        debug_checkbox_box.append(self.debug_checkbox)
+
+        api_debug_box.append(debug_checkbox_box)
+
+        # Create a frame for the API status
+        api_status_frame = Gtk.Frame()
+        api_status_frame.set_label("API Status")
+
+        api_status_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        api_status_box.set_margin_start(12)
+        api_status_box.set_margin_end(12)
+        api_status_box.set_margin_top(12)
+        api_status_box.set_margin_bottom(12)
+
+        # API availability status
+        api_available_label = Gtk.Label()
+        if GENAI_AVAILABLE:
+            api_available_label.set_markup(
+                "Gemini API Package: <span foreground='green'>Available</span>"
+            )
+        else:
+            api_available_label.set_markup(
+                "Gemini API Package: <span foreground='red'>Not Available</span>"
+            )
+        api_available_label.set_halign(Gtk.Align.START)
+        api_status_box.append(api_available_label)
+
+        # API key status
+        api_key_label = Gtk.Label()
+        if "GEMINI_API_KEY" in os.environ and os.environ["GEMINI_API_KEY"]:
+            api_key_label.set_markup(
+                "API Key: <span foreground='green'>Configured</span>"
+            )
+        else:
+            api_key_label.set_markup(
+                "API Key: <span foreground='red'>Not Configured</span>"
+            )
+        api_key_label.set_halign(Gtk.Align.START)
+        api_status_box.append(api_key_label)
+
+        # Installation instructions
+        install_info = Gtk.Label()
+        install_info.set_markup(
+            "<b>Installation Instructions:</b>\n"
+            "1. Install the Gemini API package: <tt>pip install google-generativeai</tt>\n"
+            "2. Set your API key in the environment: <tt>export GEMINI_API_KEY=your_key_here</tt>\n"
+            "   Or create a .env file with: <tt>GEMINI_API_KEY=your_key_here</tt>"
+        )
+        install_info.set_wrap(True)
+        install_info.set_halign(Gtk.Align.START)
+        api_status_box.append(install_info)
+
+        api_status_frame.set_child(api_status_box)
+        api_debug_box.append(api_status_frame)
+
+        # --- Custom Prompt Tab ---
+        custom_prompt_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        custom_prompt_box.set_margin_start(12)
+        custom_prompt_box.set_margin_end(12)
+        custom_prompt_box.set_margin_top(12)
+        custom_prompt_box.set_margin_bottom(12)
+
+        # Add a description
+        prompt_info_label = Gtk.Label()
+        prompt_info_label.set_markup(
+            "<b>Custom Prompt Editor</b>\n"
+            "Edit the default prompt used for detection. Use {target_type} as a placeholder for the target type."
+        )
+        prompt_info_label.set_wrap(True)
+        prompt_info_label.set_halign(Gtk.Align.START)
+        custom_prompt_box.append(prompt_info_label)
+
+        # Create a ScrolledWindow for the prompt text editor
+        prompt_scroll = Gtk.ScrolledWindow()
+        prompt_scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        prompt_scroll.set_vexpand(True)
+
+        # Add a text view for the prompt
+        prompt_text_view = Gtk.TextView()
+        prompt_text_view.set_wrap_mode(Gtk.WrapMode.WORD)
+        prompt_text_view.get_style_context().add_class("prompt-text")
+        prompt_text_view.set_top_margin(8)
+        prompt_text_view.set_bottom_margin(8)
+        prompt_text_view.set_left_margin(8)
+        prompt_text_view.set_right_margin(8)
+
+        # Load the default prompt
+        try:
+            with open(DEFAULT_PROMPT_FILE, "r", encoding="utf-8") as f:
+                default_prompt = f.read()
+                prompt_buffer = prompt_text_view.get_buffer()
+                prompt_buffer.set_text(default_prompt)
+        except FileNotFoundError:
+            prompt_buffer = prompt_text_view.get_buffer()
+            prompt_buffer.set_text(
+                "Please analyze this image and identify the most interesting {target_type} area.\n\n"
+                "Look for areas with these characteristics:\n"
+                "- Clear visual focal points or points of interest\n"
+                "- Detailed patterns or textures\n"
+                "- Areas with high contrast or distinctive colors\n"
+                "- Unusual or unique elements\n"
+                "- Rich details that would benefit from magnification\n\n"
+                "Respond with TWO PARTS:\n"
+                "1. COORDS: Coordinates as normalized values between 0 and 1 in the format x1,y1,x2,y2\n"
+                "   where (x1,y1) is the top-left corner and (x2,y2) is the bottom-right corner.\n"
+                "2. DESCRIPTION: A brief description (1-2 sentences) of what you identified and why it's interesting.\n\n"
+                "Format your response EXACTLY as:\n"
+                "COORDS: x1,y1,x2,y2\n"
+                "DESCRIPTION: Your description here."
+            )
+
+        prompt_scroll.set_child(prompt_text_view)
+        custom_prompt_box.append(prompt_scroll)
+
+        # Add buttons for the prompt actions
+        prompt_button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        prompt_button_box.set_halign(Gtk.Align.END)
+
+        save_prompt_button = Gtk.Button.new_with_label("Save As Default")
+        save_prompt_button.connect("clicked", self.save_custom_prompt, prompt_text_view)
+        prompt_button_box.append(save_prompt_button)
+
+        reset_prompt_button = Gtk.Button.new_with_label("Reset to Default")
+        reset_prompt_button.connect(
+            "clicked", self.reset_custom_prompt, prompt_text_view
+        )
+        prompt_button_box.append(reset_prompt_button)
+
+        custom_prompt_box.append(prompt_button_box)
+
+        # Add tabs to the notebook
+        notebook.append_page(api_debug_box, Gtk.Label(label="API Debug"))
+        notebook.append_page(custom_prompt_box, Gtk.Label(label="Custom Prompt"))
+
+        content_box.append(notebook)
+
+        # Add close button
+        close_button = Gtk.Button.new_with_label("Close")
+        close_button.set_halign(Gtk.Align.END)
+        close_button.connect("clicked", lambda btn: dialog.destroy())
+        content_box.append(close_button)
+
+        dialog.set_child(content_box)
+        dialog.present()
+
+    def save_custom_prompt(self, button, text_view):
+        """Save the custom prompt as the default."""
+        buffer = text_view.get_buffer()
+        start_iter = buffer.get_start_iter()
+        end_iter = buffer.get_end_iter()
+        prompt_text = buffer.get_text(start_iter, end_iter, False)
+
+        try:
+            os.makedirs(os.path.dirname(DEFAULT_PROMPT_FILE), exist_ok=True)
+            with open(DEFAULT_PROMPT_FILE, "w", encoding="utf-8") as f:
+                f.write(prompt_text)
+            self.show_notification("Custom prompt saved as default", 3)
+        except Exception as e:
+            self.show_notification(f"Error saving prompt: {e}", 3)
+
+    def reset_custom_prompt(self, button, text_view):
+        """Reset the prompt to the default template."""
+        default_template = (
+            "Please analyze this image and identify the most interesting {target_type} area.\n\n"
+            "Look for areas with these characteristics:\n"
+            "- Clear visual focal points or points of interest\n"
+            "- Detailed patterns or textures\n"
+            "- Areas with high contrast or distinctive colors\n"
+            "- Unusual or unique elements\n"
+            "- Rich details that would benefit from magnification\n\n"
+            "Respond with TWO PARTS:\n"
+            "1. COORDS: Coordinates as normalized values between 0 and 1 in the format x1,y1,x2,y2\n"
+            "   where (x1,y1) is the top-left corner and (x2,y2) is the bottom-right corner.\n"
+            "2. DESCRIPTION: A brief description (1-2 sentences) of what you identified and why it's interesting.\n\n"
+            "Format your response EXACTLY as:\n"
+            "COORDS: x1,y1,x2,y2\n"
+            "DESCRIPTION: Your description here."
+        )
+
+        buffer = text_view.get_buffer()
+        buffer.set_text(default_template)
+        self.show_notification("Prompt reset to default template", 3)
+
+    def process_image(self, image_path):
+        """Start processing the image in a separate thread."""
+        # Mark that we're processing
+        self.processing = True
+        self.show_notification(f"Processing {os.path.basename(image_path)}...")
+
+        # Load the image in a background thread
+        thread = threading.Thread(target=self._process_image_thread, args=(image_path,))
+        thread.daemon = True
+        thread.start()
+
+    def _process_image_thread(self, image_path):
+        """Background thread for image processing."""
+        try:
+            # Load the image
+            self.current_image = Image.open(image_path)
+            print(f"Processing image: {image_path}")
+            print(f"Current directory: {self.current_dir}")
+
+            width, height = self.current_image.size
+            print(f"Image dimensions: {width}x{height}")
+
+            # Keep RGBA mode when possible - only convert to RGB when sending to Gemini API
+            # We'll use a copy for the Gemini API to avoid modifying the original
+
+            # Check if we have manually selected points
+            if (
+                hasattr(self, "selected_magnification_point")
+                and self.selected_magnification_point
+                and self.selected_magnification_point[0] >= 0
+                and self.selected_magnification_point[1] >= 0
+            ):
+                # Use manually selected points
+                mag_x, mag_y = self.selected_magnification_point
+                preview_x, preview_y = (
+                    self.selected_preview_point
+                    if self.selected_preview_point
+                    else (mag_x + 128, mag_y + 128)
+                )
+
+                print(f"Magnification point: ({mag_x}, {mag_y})")
+                print(f"Preview point: ({preview_x}, {preview_y})")
+
+                # Calculate the selection box based on current point and settings
+                interesting_area = self._calculate_selection_box()
+                # If calculation failed, fallback to something reasonable
+                if not interesting_area:
+                    # Calculate a reasonable bounding box
+                    shortest_dimension = min(width, height)
+                    selection_diameter = int(shortest_dimension * self.selection_ratio)
+                    radius = selection_diameter / 2
+                    x1 = max(0, mag_x - radius)
+                    y1 = max(0, mag_y - radius)
+                    x2 = min(width, mag_x + radius)
+                    y2 = min(height, mag_y + radius)
+                    interesting_area = (x1, y1, x2, y2)
+
+                print(f"Using manually selected area: {interesting_area}")
+
+                # For the debug overlay, we'll use the actual Gemini box if available
+                # or the calculated box if not
+                debug_box = (
+                    self.gemini_box if hasattr(self, "gemini_box") else interesting_area
+                )
+
+                # Create a processed image with the highlight, passing the configurable parameters
+                self.processed_image = image_processor.create_highlighted_image(
+                    self.current_image,
+                    interesting_area,
+                    preview_center=(preview_x, preview_y),
+                    selection_ratio=self.selection_ratio,
+                    zoom_factor=self.zoom_factor,
+                    show_debug_overlay=self.debug_mode and debug_box is not None,
+                )
+            else:
+                # Use Gemini API to identify interesting textile parts
+                print("No valid manual selection, using Gemini API")
+
+                # For Gemini API, we need to make a copy that might need RGB conversion
+                gemini_image = self.current_image
+                if gemini_image.mode == "RGBA":
+                    # Only convert the copy to RGB for the API
+                    gemini_image = gemini_image.copy().convert("RGB")
+
+                interesting_area, raw_box, description = (
+                    gemini_analyzer.identify_interesting_textile(gemini_image)
+                )
+
+                # Store the original Gemini API boundary box for debug overlay
+                self.gemini_box = interesting_area
+
+                # Store the raw boundary box
+                self.raw_gemini_box = raw_box
+
+                # Store the description
+                self.gemini_description = description
+
+                # Update the description in the UI if we're in a manual mode window
+                # (needs to be done in the main thread)
+                if description:
+                    GLib.idle_add(self._update_description_in_ui, description)
+
+                if raw_box:
+                    print(f"Raw Gemini box before adjustments: {self.raw_gemini_box}")
+                if description:
+                    print(f"Gemini description: {description}")
+
+                # Create a processed image with the highlight - use original image to preserve quality
+                # Pass the configurable parameters
+                self.processed_image = image_processor.create_highlighted_image(
+                    self.current_image,
+                    interesting_area,
+                    selection_ratio=self.selection_ratio,
+                    zoom_factor=self.zoom_factor,
+                    show_debug_overlay=self.debug_mode,
+                )
+
+                # Show notification about AI status
+                if not gemini_analyzer.AI_ENABLED:
+                    GLib.idle_add(
+                        self.show_notification,
+                        "Using fallback mode (no Gemini AI). Install google-generativeai package for AI features.",
+                        5,
+                    )
+
+            # Save debug image with red dot at the interesting spot
+            debug_path = image_processor.save_debug_image(
+                self.current_image,
+                interesting_area,
+                image_path,
+                debug_dir=DEBUG_DIR,
+                current_dir=self.current_dir,
+            )
+            print(f"Debug image saved to: {debug_path}")
+
+            # Save the processed image
+            output_path = image_processor.save_processed_image(
+                self.processed_image,
+                image_path,
+                output_dir=PREVIEWS_DIR,
+                current_dir=self.current_dir,
+            )
+            print(f"Processed image saved to: {output_path}")
+
+            # Update the UI on the main thread
+            GLib.idle_add(self._processing_complete)
+
+        except Exception as e:
+            GLib.idle_add(self._show_error, str(e))
+
+    def _processing_complete(self):
+        """Called when image processing is complete."""
+        # Reset processing state
+        self.processing = False
+
+        # Update progress bar
+        if self.image_queue:
+            total = len(self.image_queue) + 1  # +1 for the current image
+            progress = 1 - (len(self.image_queue) / total)
+            if self.progress_bar:
+                self.progress_bar.set_fraction(progress)
+
+            # Process the next image
+            self.process_next_image()
+        else:
+            if self.progress_bar:
+                self.progress_bar.set_visible(False)
+            self.show_notification("All images processed")
+
+        if self.spinner:
+            self.spinner.stop()
+        return False  # Important for GLib.idle_add
+
+    def process_next_image(self):
+        """Process the next image in the queue."""
+        if not self.image_queue:
+            self.show_notification("All images processed")
+            if self.progress_bar:
+                self.progress_bar.set_visible(False)
+            return
+
+        # Get the next image path
+        image_path = self.image_queue.pop(0)
+        self.current_image_path = image_path
+        self.process_image(image_path)
+
+        # Update progress bar
+        total = len(self.image_queue) + 1  # +1 for the current image
+        progress = 1 - (len(self.image_queue) / total)
+        if self.progress_bar:
+            self.progress_bar.set_fraction(progress)
+
+    def process_dropped_file(self, file):
+        """Process a dropped file or directory."""
+        file_path = file.get_path()
+        if not file_path:
+            self.show_notification("Invalid file")
+            return False
+
+        # Remember the directory of the dropped file/folder
+        if os.path.isdir(file_path):
+            self.current_dir = file_path
+        else:
+            self.current_dir = os.path.dirname(file_path)
+
+        # Clear any existing image queue
+        self.image_queue = []
+
+        # Check if it's a directory or a file
+        if os.path.isdir(file_path):
+            # Directory dropped, look for image files
+            image_extensions = [".jpg", ".jpeg", ".png", ".bmp", ".gif"]
+
+            for root, _, files in os.walk(file_path):
+                for file_name in files:
+                    ext = os.path.splitext(file_name)[1].lower()
+                    if ext in image_extensions:
+                        self.image_queue.append(os.path.join(root, file_name))
+
+            if not self.image_queue:
+                self.show_notification("No images found in directory")
+                return False
+
+            # Start processing the first image
+            count = len(self.image_queue)
+            self.show_notification(f"Processing {count} images...")
+
+            # Setup progress bar
+            if self.progress_bar:
+                self.progress_bar.set_visible(True)
+                self.progress_bar.set_fraction(0)
+
+            self.process_next_image()
+            return True
+
+        # Single file dropped, check if it's an image
+        ext = os.path.splitext(file_path)[1].lower()
+        image_extensions = [".jpg", ".jpeg", ".png", ".bmp", ".gif"]
+
+        if ext in image_extensions:
+            self.image_queue.append(file_path)
+            self.show_notification("Processing image...")
+            self.process_next_image()
+            return True
+
+        self.show_notification("The file is not an image")
+        return False
 
 
 def main():
