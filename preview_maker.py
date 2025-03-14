@@ -10,6 +10,7 @@ import time
 import threading
 import subprocess
 import gi
+import toml
 
 # Set required versions before importing
 gi.require_version("Gtk", "4.0")
@@ -103,13 +104,35 @@ class PreviewMaker(Gtk.Application):
         # Configurable parameters for circle sizes
         self.selection_ratio = config.get_image_processing("selection_ratio")
         self.zoom_factor = config.get_image_processing("zoom_factor")
-        # Debug mode flag
-        self.debug_mode = False  # Default to debug mode off
+
+        # Load debug mode from config if it exists
+        try:
+            import toml
+
+            config_path = config.CONFIG_PATH
+            if os.path.exists(config_path):
+                with open(config_path, "r") as f:
+                    cfg = toml.load(f)
+                # Check if UI section with debug_mode exists
+                if "ui" in cfg and "debug_mode" in cfg["ui"]:
+                    self.debug_mode = cfg["ui"]["debug_mode"]
+                    print(f"Loaded debug mode from config: {self.debug_mode}")
+                else:
+                    self.debug_mode = False  # Default to debug mode off
+        except Exception:
+            # Default to debug mode off if can't load from config
+            self.debug_mode = False
+
         # Store the description from Gemini
         self.gemini_description = None
 
         # Ensure desktop file exists for proper notifications
         self._ensure_desktop_file()
+
+    def debug_print(self, *args, **kwargs):
+        """Print debug information only when debug mode is enabled"""
+        if self.debug_mode:
+            print(*args, **kwargs)
 
     def on_activate(self, app):
         """Initialize the application window and UI components."""
@@ -555,7 +578,9 @@ X-GNOME-UsesNotifications=true
         self.display_height = img_height
         self.display_scale = scale_factor
 
-        print(f"Display size: {img_width}x{img_height}, Scale: {scale_factor}")
+        self.debug_print(
+            f"Display size: {img_width}x{img_height}, Scale: {scale_factor}"
+        )
 
         # Create an overlay to draw circles on the image
         overlay = Gtk.Overlay()
@@ -846,12 +871,14 @@ X-GNOME-UsesNotifications=true
         # Get the actual image dimensions
         img_width, img_height = self.current_image.size
 
-        print(f"Drawing area dimensions: {width}x{height}")
-        print(f"Image dimensions: {img_width}x{img_height}")
-        print(
+        self.debug_print(f"Drawing area dimensions: {width}x{height}")
+        self.debug_print(f"Image dimensions: {img_width}x{img_height}")
+        self.debug_print(
             f"Magnification point (normalized): {self.selected_magnification_point_norm}"
         )
-        print(f"Preview point (normalized): {self.selected_preview_point_norm}")
+        self.debug_print(
+            f"Preview point (normalized): {self.selected_preview_point_norm}"
+        )
 
         # First determine the actual image display size within the drawing area
         # (this accounts for aspect ratio preservation)
@@ -875,9 +902,11 @@ X-GNOME-UsesNotifications=true
         x_offset = (width - image_display_width) / 2
         y_offset = (height - image_display_height) / 2
 
-        print(f"Image display size: {image_display_width}x{image_display_height}")
-        print(f"Scale factors: {scale_x}, {scale_y}")
-        print(f"Offsets: {x_offset}, {y_offset}")
+        self.debug_print(
+            f"Image display size: {image_display_width}x{image_display_height}"
+        )
+        self.debug_print(f"Scale factors: {scale_x}, {scale_y}")
+        self.debug_print(f"Offsets: {x_offset}, {y_offset}")
 
         # Draw the effective image area (for debugging)
         cr.set_source_rgba(0.1, 0.1, 0.1, 0.05)  # Very subtle rectangle
@@ -904,7 +933,7 @@ X-GNOME-UsesNotifications=true
             draw_x = x_offset + (norm_x * image_display_width)
             draw_y = y_offset + (norm_y * image_display_height)
 
-            print(f"Drawing magnification circle at: ({draw_x}, {draw_y})")
+            self.debug_print(f"Drawing magnification circle at: ({draw_x}, {draw_y})")
 
             # Draw the magnification circle (green)
             cr.set_source_rgba(0, 1, 0, 0.5)  # Green, semi-transparent
@@ -932,7 +961,7 @@ X-GNOME-UsesNotifications=true
             draw_x = x_offset + (norm_x * image_display_width)
             draw_y = y_offset + (norm_y * image_display_height)
 
-            print(f"Drawing preview circle at: ({draw_x}, {draw_y})")
+            self.debug_print(f"Drawing preview circle at: ({draw_x}, {draw_y})")
 
             # Draw the preview circle (blue)
             cr.set_source_rgba(0, 0, 1, 0.5)  # Blue, semi-transparent
@@ -1042,9 +1071,9 @@ X-GNOME-UsesNotifications=true
             widget_width = widget.get_width()
             widget_height = widget.get_height()
 
-            print(f"Widget dimensions: {widget_width}x{widget_height}")
-            print(f"Image dimensions: {img_width}x{img_height}")
-            print(f"Click at widget coords: ({x}, {y})")
+            self.debug_print(f"Widget dimensions: {widget_width}x{widget_height}")
+            self.debug_print(f"Image dimensions: {img_width}x{img_height}")
+            self.debug_print(f"Click at widget coords: ({x}, {y})")
 
             # Calculate the actual displayed image size (accounting for aspect ratio)
             display_ratio = img_width / img_height
@@ -1063,8 +1092,10 @@ X-GNOME-UsesNotifications=true
             x_offset = (widget_width - image_display_width) / 2
             y_offset = (widget_height - image_display_height) / 2
 
-            print(f"Display image size: {image_display_width}x{image_display_height}")
-            print(f"Offsets: {x_offset}, {y_offset}")
+            self.debug_print(
+                f"Display image size: {image_display_width}x{image_display_height}"
+            )
+            self.debug_print(f"Offsets: {x_offset}, {y_offset}")
 
             # Check if click is within the actual image area
             if (
@@ -1088,8 +1119,8 @@ X-GNOME-UsesNotifications=true
             pixel_x = int(norm_x * img_width)
             pixel_y = int(norm_y * img_height)
 
-            print(f"Normalized coordinates: ({norm_x:.4f}, {norm_y:.4f})")
-            print(f"Pixel coordinates: ({pixel_x}, {pixel_y})")
+            self.debug_print(f"Normalized coordinates: ({norm_x:.4f}, {norm_y:.4f})")
+            self.debug_print(f"Pixel coordinates: ({pixel_x}, {pixel_y})")
 
             # Ensure coordinates are within image bounds (redundant check)
             if norm_x < 0 or norm_x > 1 or norm_y < 0 or norm_y > 1:
@@ -1105,18 +1136,22 @@ X-GNOME-UsesNotifications=true
                 self.show_notification(
                     f"Magnification point set at ({pixel_x}, {pixel_y})"
                 )
-                print(
+                self.debug_print(
                     f"Magnification point selected: {self.selected_magnification_point}"
                 )
-                print(f"Normalized: {self.selected_magnification_point_norm}")
+                self.debug_print(
+                    f"Normalized: {self.selected_magnification_point_norm}"
+                )
 
             elif button == 1:  # Left click
                 # Store both normalized and pixel coordinates
                 self.selected_preview_point_norm = (norm_x, norm_y)
                 self.selected_preview_point = (pixel_x, pixel_y)
                 self.show_notification(f"Preview point set at ({pixel_x}, {pixel_y})")
-                print(f"Preview point selected: {self.selected_preview_point}")
-                print(f"Normalized: {self.selected_preview_point_norm}")
+                self.debug_print(
+                    f"Preview point selected: {self.selected_preview_point}"
+                )
+                self.debug_print(f"Normalized: {self.selected_preview_point_norm}")
         else:
             # No image loaded
             self.show_notification("No image loaded")
@@ -1275,7 +1310,7 @@ X-GNOME-UsesNotifications=true
                 box_width = x2 - x1
                 box_height = y2 - y1
                 area_percentage = (box_width * box_height) / (width * height) * 100
-                print(f"Bounding box area: {area_percentage:.2f}% of image")
+                self.debug_print(f"Bounding box area: {area_percentage:.2f}% of image")
 
             # Redraw the circle area
             GLib.idle_add(lambda: self.circle_area and self.circle_area.queue_draw())
@@ -1445,8 +1480,15 @@ X-GNOME-UsesNotifications=true
 
     def on_debug_toggled(self, checkbox):
         """Handle toggling of the debug checkbox."""
+        was_debug_on = self.debug_mode
         self.debug_mode = checkbox.get_active()
         print(f"Debug checkbox toggled - debug mode set to: {self.debug_mode}")
+
+        # Save the debug setting to config
+        try:
+            config.update_config("ui", "debug_mode", self.debug_mode)
+        except Exception as e:
+            print(f"Failed to save debug setting: {e}")
 
         # Just redraw the overlay immediately if we have points set
         if self.circle_area:
@@ -1464,7 +1506,13 @@ X-GNOME-UsesNotifications=true
     def on_selection_size_changed(self, scale):
         """Handle changes to the selection size slider."""
         self.selection_ratio = scale.get_value()
-        print(f"Selection size ratio set to: {self.selection_ratio}")
+        self.debug_print(f"Selection size ratio set to: {self.selection_ratio}")
+
+        # Save the setting to config
+        config.update_config(
+            "image_processing", "selection_ratio", self.selection_ratio
+        )
+
         # Update the display immediately
         if self.circle_area:
             self.circle_area.queue_draw()
@@ -1472,7 +1520,11 @@ X-GNOME-UsesNotifications=true
     def on_zoom_factor_changed(self, scale):
         """Handle changes to the zoom factor slider."""
         self.zoom_factor = scale.get_value()
-        print(f"Zoom factor set to: {self.zoom_factor}")
+        self.debug_print(f"Zoom factor set to: {self.zoom_factor}")
+
+        # Save the setting to config
+        config.update_config("image_processing", "zoom_factor", self.zoom_factor)
+
         # Update the display immediately
         if self.circle_area:
             self.circle_area.queue_draw()

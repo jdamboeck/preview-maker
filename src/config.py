@@ -4,9 +4,6 @@ Manages all configurable settings through a TOML file.
 """
 
 import os
-import sys
-from pathlib import Path
-import json
 
 # Define default configuration values
 DEFAULT_CONFIG = {
@@ -20,14 +17,14 @@ DEFAULT_CONFIG = {
     },
     # Image processing parameters
     "image_processing": {
-        "selection_ratio": 0.1,  # Selection circle diameter as percentage of image's shortest dimension
+        "selection_ratio": 0.1,  # Selection circle diameter as % of shortest dimension
         "zoom_factor": 3.0,  # How much to zoom the preview
         "png_compression": 4,  # Balanced compression (range 0-9, lower is better quality)
         "high_resampling": 1,  # Image.LANCZOS (1) is highest quality resampling filter
     },
     # Gemini API configuration
     "gemini_api": {
-        "model_name": "gemini-1.5-pro-vision",
+        "model_name": "gemini-1.5-flash",
         "max_output_tokens": 256,
         "temperature": 0.1,  # Low temperature for more deterministic responses
         "top_p": 0.95,
@@ -39,7 +36,11 @@ DEFAULT_CONFIG = {
     },
     # Target type options
     "detection": {
-        "default_target_type": "textile pattern or detail",
+        "default_target_type": "interesting detail",
+    },
+    # UI settings
+    "ui": {
+        "debug_mode": False,  # Whether to show detailed debug logs
     },
 }
 
@@ -49,6 +50,9 @@ WORKSPACE_ROOT = os.path.dirname(
     os.path.dirname(os.path.abspath(__file__))
 )  # Go up one level to project root
 CONFIG_PATH = os.path.join(WORKSPACE_ROOT, CONFIG_FILE)
+
+# Store the configuration instance as a global variable
+_CONFIG = None
 
 
 # Load configuration
@@ -114,9 +118,10 @@ def _deep_update(original, update):
 
 def get_config():
     """Get the configuration, loading it if necessary."""
-    if not hasattr(get_config, "_config"):
-        get_config._config = load_config()
-    return get_config._config
+    global _CONFIG
+    if _CONFIG is None:
+        _CONFIG = load_config()
+    return _CONFIG
 
 
 def get_path(key):
@@ -260,6 +265,51 @@ def get_combined_prompt(target_type=None):
         combined_prompt = combined_prompt.replace("{target_type}", target_type)
 
     return combined_prompt
+
+
+# Function to update and save config
+def update_config(section, key, value):
+    """
+    Update a configuration value and save it to the TOML file.
+
+    Args:
+        section (str): The configuration section (e.g., 'image_processing')
+        key (str): The configuration key to update
+        value: The new value to set
+
+    Returns:
+        bool: True if the update was successful, False otherwise
+    """
+    try:
+        import toml
+
+        # First make sure we have the latest config
+        config = get_config()
+
+        # Update the config value
+        if section in config and key in config[section]:
+            config[section][key] = value
+
+            # Save the updated config to the TOML file
+            with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+                toml.dump(config, f)
+
+            # Reset the cached config so subsequent calls get the new values
+            global _CONFIG
+            _CONFIG = None
+
+            print(f"Updated config: {section}.{key} = {value}")
+            return True
+        else:
+            print(f"Error: Section '{section}' or key '{key}' not found in config")
+            return False
+    except ImportError:
+        print("Warning: toml package not installed. Cannot update configuration.")
+        print("To enable configuration, run: pip install toml")
+        return False
+    except Exception as e:
+        print(f"Error updating configuration: {e}")
+        return False
 
 
 # Default prompts as fallbacks

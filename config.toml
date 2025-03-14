@@ -23,3 +23,6 @@ image_extensions = [ ".jpg", ".jpeg", ".png", ".bmp", ".gif",]
 
 [detection]
 default_target_type = "interesting detail"
+
+[ui]
+debug_mode = true
