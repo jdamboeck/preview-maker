@@ -177,3 +177,21 @@ cython_debug/
 #my
 debug_output/*
 previews/*
+
+# Project specific
+previews/
+previews/debug/
+__pycache__/
+tests/test_data/
+.env
+
+# Exclude original file versions during transition
+kimono_analyzer.py
+gemini_analyzer.py
+image_processor.py
+prompts/*.txt
+sample_kimono.jpg
+
+# Keep
+!prompts/user_prompt.md
+!prompts/technical_prompt.md

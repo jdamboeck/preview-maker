@@ -1,11 +1,11 @@
-# Kimono Textile Analyzer
+# Preview Maker
 
-A GTK-based application for analyzing kimono textiles using Google's Gemini AI API. The tool finds the most interesting textile parts in kimono images and creates a zoomed-in circular highlight.
+A GTK-based application for analyzing images using Google's Gemini AI API. The tool finds the most interesting details in images and creates a zoomed-in circular highlight.
 
 ## Features
 
 - Drag and drop interface for images or folders
-- AI-powered detection of interesting textile patterns
+- AI-powered detection of interesting details and patterns
 - Creates a circular highlight overlay on the original image
 - Shows a zoomed-in view of the detected interesting part
 - Configurable parameters via TOML configuration file
@@ -59,7 +59,24 @@ temperature = 0.2
 
 Run the application:
 ```
-python kimono_analyzer.py
+python preview_maker.py
 ```
 
-Then drag and drop kimono images or folders containing images into the application window.
+Then drag and drop images or folders containing images into the application window.
+
+## Project Structure
+
+The project is organized as follows:
+
+- `preview_maker.py`: Main application entry point
+- `src/`: Core application modules
+  - `gemini_analyzer.py`: Handles AI detection with Google Gemini
+  - `image_processor.py`: Image processing and highlight creation
+  - `config.py`: Configuration management
+- `prompts/`: AI prompt files
+  - `user_prompt.md`: User-editable part of the prompt
+  - `technical_prompt.md`: Technical part of the prompt that controls response format
+- `utils/`: Utility scripts
+- `tests/`: Test modules
+- `data/`: Sample images
+- `docs/`: Documentation and example images

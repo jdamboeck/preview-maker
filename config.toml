@@ -2,7 +2,8 @@
 previews_dir = "previews"
 debug_dir = "previews/debug"
 prompts_dir = "prompts"
-default_prompt_file = "prompts/user_prompt.txt"
+default_prompt_file = "prompts/user_prompt.md"
+technical_prompt_file = "prompts/technical_prompt.md"
 
 [image_processing]
 selection_ratio = 0.1
@@ -21,4 +22,4 @@ top_k = 0
 image_extensions = [ ".jpg", ".jpeg", ".png", ".bmp", ".gif",]
 
 [detection]
-default_target_type = "textile pattern or detail"
+default_target_type = "interesting detail"
