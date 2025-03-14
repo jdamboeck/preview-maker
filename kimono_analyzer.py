@@ -522,7 +522,7 @@ X-GNOME-UsesNotifications=true
         # Make the window automatically fit content with a reasonable max size
         if img_width > max_width or img_height > max_height:
             # Set a maximum size that fits on screen
-            manual_window.set_default_size(window_width, window_height)
+        manual_window.set_default_size(window_width, window_height)
         else:
             # Let it size to content naturally, with a minimum reasonable size
             manual_window.set_size_request(
@@ -1737,11 +1737,11 @@ X-GNOME-UsesNotifications=true
                     shortest_dimension = min(width, height)
                     selection_diameter = int(shortest_dimension * self.selection_ratio)
                     radius = selection_diameter / 2
-                    x1 = max(0, mag_x - radius)
-                    y1 = max(0, mag_y - radius)
-                    x2 = min(width, mag_x + radius)
-                    y2 = min(height, mag_y + radius)
-                    interesting_area = (x1, y1, x2, y2)
+                x1 = max(0, mag_x - radius)
+                y1 = max(0, mag_y - radius)
+                x2 = min(width, mag_x + radius)
+                y2 = min(height, mag_y + radius)
+                interesting_area = (x1, y1, x2, y2)
 
                 print(f"Using manually selected area: {interesting_area}")
 
@@ -1803,8 +1803,8 @@ X-GNOME-UsesNotifications=true
                     show_debug_overlay=self.debug_mode,
                 )
 
-                # Show notification about AI status
-                if not gemini_analyzer.AI_ENABLED:
+            # Show notification about AI status
+            if not gemini_analyzer.AI_ENABLED:
                     # Remove desktop notification but keep console logging
                     print(
                         "Using fallback mode (no Gemini AI). Install google-generativeai package for AI features."
