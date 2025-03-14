@@ -6,15 +6,12 @@ using Google Gemini AI and creates a zoomed-in circular overlay.
 
 import os
 import sys
-import threading
 import time
+import threading
 import subprocess
 import gi
 
-# GTK imports first
-gi.require_version("Gtk", "4.0")
-gi.require_version("Gdk", "4.0")
-gi.require_version("Notify", "0.7")  # Add Notify requirement
+# Add Notify requirement
 from gi.repository import Gtk, Gdk, GdkPixbuf, GLib, Gio, Notify
 
 # Image processing imports
@@ -35,7 +32,10 @@ except ImportError:
         "WARNING: google-generativeai package not installed. "
         "Run 'pip install google-generativeai' to enable AI features."
     )
-
+# GTK imports first
+gi.require_version("Gtk", "4.0")
+gi.require_version("Gdk", "4.0")
+gi.require_version("Notify", "0.7")
 
 # Create previews directory if it doesn't exist
 PREVIEWS_DIR = "previews"
