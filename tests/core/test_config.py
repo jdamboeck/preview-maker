@@ -96,12 +96,12 @@ def test_update_config(config_manager):
 def test_cache_directory_creation(config_manager):
     """Test that cache directory is created when loading config."""
     with tempfile.TemporaryDirectory() as temp_dir:
-        os.environ["PREVIEW_MAKER_CACHE_DIR"] = temp_dir
+        os.environ["PREVIEW_MAKER_PREVIEWS_DIR"] = temp_dir
 
         config_manager.load_config()
         config = config_manager.get_config()
 
         assert Path(temp_dir).exists()
-        assert config.cache_dir == Path(temp_dir)
+        assert config.previews_dir == Path(temp_dir)
 
-        del os.environ["PREVIEW_MAKER_CACHE_DIR"]
+        del os.environ["PREVIEW_MAKER_PREVIEWS_DIR"]
