@@ -7,7 +7,7 @@ This document provides a concrete starting point for implementing the Preview Ma
 1. **Environment Setup**:
    ```bash
    # Clone the repository
-   git clone https://github.com/your-org/preview-maker.git
+   git clone https://github.com/jdamboeck/preview-maker.git
    cd preview-maker
 
    # Build the Docker environment

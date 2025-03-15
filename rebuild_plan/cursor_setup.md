@@ -639,7 +639,7 @@ Add these instructions to your project's README.md:
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/preview-maker.git
+   git clone https://github.com/jdamboeck/preview-maker.git
    cd preview-maker
    ```
 
