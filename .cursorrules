@@ -110,6 +110,31 @@ When working on this project, always follow these Docker-related practices:
 6. Update documentation as needed
 7. Verify changes against the risk management plan
 
+## Git Workflow
+Follow the standardized Git workflow outlined in rebuild_plan/git_workflow.md:
+
+1. **Branch Strategy**:
+   - Work in feature branches created from the develop branch
+   - Name branches according to the pattern: feature/<feature-name>, bugfix/<bug-description>, etc.
+   - Keep branches focused on single features or fixes
+
+2. **Commit Standards**:
+   - Write descriptive commit messages with prefixes (feat:, fix:, docs:, etc.)
+   - Keep the first line under 50 characters
+   - Add detailed descriptions for complex changes
+
+3. **Code Review Process**:
+   - Create Pull Requests to the develop branch
+   - Ensure all tests pass before requesting review
+   - Address review comments with additional commits
+
+4. **Merging**:
+   - Use non-fast-forward merges (--no-ff) to maintain a clear history
+   - Merge to main only through release branches or hotfixes
+   - Tag all production releases with version numbers
+
+For detailed information, refer to rebuild_plan/git_workflow.md.
+
 ## Import Guidelines
 - Import GTK modules first, then standard library, then app modules
 - Use absolute imports within the application
