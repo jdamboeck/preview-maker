@@ -28,6 +28,10 @@ class PreviewMakerConfig(BaseModel):
         default=Path("prompts"),
         description="Directory for storing prompt templates",
     )
+    cache_dir: Path = Field(
+        default=Path("cache"),
+        description="Directory for storing cached images",
+    )
     default_prompt_file: Path = Field(
         default=Path("prompts/user_prompt.md"),
         description="Default prompt template file",
@@ -45,6 +49,10 @@ class PreviewMakerConfig(BaseModel):
     zoom_factor: float = Field(
         default=3.0,
         description="Zoom factor for preview overlay",
+    )
+    max_cache_size_mb: int = Field(
+        default=100,  # 100 MB default cache size
+        description="Maximum cache size in megabytes",
     )
     png_compression: int = Field(
         default=4,
@@ -251,20 +259,21 @@ class ConfigManager:
             self._ensure_directories_exist()
 
     def _ensure_directories_exist(self) -> None:
-        """Ensure all configured directories exist."""
+        """Ensure that configured directories exist."""
         if not self._config:
             return
 
-        # List of directory paths to check/create
-        directories = [
-            self._config.previews_dir,
-            self._config.debug_dir,
-            self._config.prompts_dir,
-        ]
+        # Create previews directory
+        Path(self._config.previews_dir).mkdir(exist_ok=True, parents=True)
 
-        for directory in directories:
-            dir_path = Path(str(directory)).expanduser().resolve()
-            dir_path.mkdir(parents=True, exist_ok=True)
+        # Create debug directory
+        Path(self._config.debug_dir).mkdir(exist_ok=True, parents=True)
+
+        # Create prompts directory
+        Path(self._config.prompts_dir).mkdir(exist_ok=True, parents=True)
+
+        # Create cache directory
+        Path(self._config.cache_dir).mkdir(exist_ok=True, parents=True)
 
     def get_config(self) -> PreviewMakerConfig:
         """Get the current configuration.
@@ -302,6 +311,7 @@ class ConfigManager:
                         "previews_dir": str(self._config.previews_dir),
                         "debug_dir": str(self._config.debug_dir),
                         "prompts_dir": str(self._config.prompts_dir),
+                        "cache_dir": str(self._config.cache_dir),
                         "default_prompt_file": str(self._config.default_prompt_file),
                         "technical_prompt_file": str(
                             self._config.technical_prompt_file
@@ -312,6 +322,7 @@ class ConfigManager:
                     toml_config["image_processing"] = {
                         "selection_ratio": self._config.selection_ratio,
                         "zoom_factor": self._config.zoom_factor,
+                        "max_cache_size_mb": self._config.max_cache_size_mb,
                         "png_compression": self._config.png_compression,
                         "high_resampling": self._config.high_resampling,
                     }
