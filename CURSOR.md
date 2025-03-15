@@ -1,0 +1,1 @@
+Dont forget!!! You cant test things using the gemini API from you environment. If you need to test it ask user to start it from their test env and report back to you. Dont forget!!!

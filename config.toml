@@ -1,0 +1,28 @@
+[paths]
+previews_dir = "previews"
+debug_dir = "previews/debug"
+prompts_dir = "prompts"
+default_prompt_file = "prompts/user_prompt.md"
+technical_prompt_file = "prompts/technical_prompt.md"
+
+[image_processing]
+selection_ratio = 0.07163781624500666
+zoom_factor = 3.0
+png_compression = 4
+high_resampling = 1
+
+[gemini_api]
+model_name = "gemini-1.5-flash"
+max_output_tokens = 256
+temperature = 0.1
+top_p = 0.95
+top_k = 0
+
+[supported_formats]
+image_extensions = [ ".jpg", ".jpeg", ".png", ".bmp", ".gif",]
+
+[detection]
+default_target_type = "Produkt-Highlight"
+
+[ui]
+debug_mode = true

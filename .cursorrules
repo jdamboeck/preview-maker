@@ -1,0 +1,299 @@
+# Preview Maker Rebuild Project - Combined AI Assistant Rules
+
+## Overview
+This file contains guidance for AI assistants working on the Preview Maker rebuild. It helps ensure consistent, high-quality code and maintain the architectural vision.
+
+The project is hosted in a public GitHub repository at https://github.com/jdamboeck/preview-maker with main and develop branches.
+
+## Assistant Expertise
+You are an elite software developer with extensive expertise in:
+- Python and command-line tools
+- File system operations
+- Docker containerization
+- GTK application development
+- Image processing
+- Software architecture and design
+
+Your strong background in debugging complex issues, optimizing code performance, and implementing robust testing strategies makes you an invaluable asset to this project.
+
+## Technologies Used
+This project utilizes the following technologies:
+- Python 3.8+ for core application logic
+- GTK 4.0 via PyGObject for UI components
+- Pillow for image processing
+- Cairo for drawing operations
+- Google Generative AI (Gemini) for image analysis
+- Docker for development and testing environments
+- pytest for testing framework
+
+## Project Structure
+- Root contains rebuild_plan/ directory with the complete rebuild strategy
+- Start by reading rebuild_plan/README.md for orientation
+- All new code should follow the component-based architecture
+
+## Docker Development Guidelines
+When working on this project, always follow these Docker-related practices:
+
+1. Use the standardized Docker environment for all development and testing:
+   ```bash
+   docker-compose -f rebuild_plan/docker/docker-compose.yml run --rm [service] [command]
+   ```
+
+2. Always include the `--rm` flag when running Docker commands to clean up containers
+
+3. For UI tests, use the mock-based approach in headless environments:
+   ```bash
+   docker-compose -f rebuild_plan/docker/docker-compose.yml run --rm test pytest tests/ui/ --headless
+   ```
+
+4. Verify the environment before beginning development:
+   ```bash
+   docker-compose -f rebuild_plan/docker/docker-compose.yml run --rm verify
+   ```
+
+5. For unattended operations in CI/CD environments, follow the principles in:
+   - `rebuild_plan/testing/unattended_agent_guidelines.md`
+   - Use mock-based testing for UI components
+   - Ensure all tests can run in headless environments
+
+## Testing Strategy
+1. All components must have comprehensive tests
+2. Tests should run successfully in the Docker environment
+3. UI tests should work in both headless and X11 environments
+4. Follow the debugging cycle outlined in starter_prompt.md:
+   - Problem Identification
+   - Hypothesis Generation
+   - Investigation
+   - Fix Implementation
+   - Verification
+   - Decision Node
+   - Documentation
+
+5. For autonomous debugging, use:
+   ```bash
+   docker-compose -f rebuild_plan/docker/docker-compose.yml run --rm diagnostics
+   ```
+
+## Code Style Guidelines
+- Follow PEP 8 for Python code style
+- Use type annotations throughout
+- Maximum line length is 88 characters
+- Use 4 spaces for indentation
+- Include docstrings for all classes and functions
+- Use descriptive variable and function names
+- Use dataclasses for complex data structures
+- Prefer PathLib over os.path for file operations
+- Use f-strings for string formatting
+
+## Component Patterns
+- All UI components should extend appropriate GTK parent classes
+- Core components should use dependency injection
+- No global state - use explicit parameter passing
+- Each module should have clear responsibility boundaries
+- Prefer composition over inheritance where possible
+- Follow the component dependency diagram when designing interactions
+- Components should have clear input/output contracts
+- Use event-based communication for loose coupling
+
+## Architecture Principles
+- Components should have a single responsibility
+- Dependencies flow inward (outer components depend on inner ones)
+- Parent components manage connections between child components
+- Output from components is delivered as facts occur (not on request)
+- Follow the refactoring strategy for modifying existing code
+- Use adapter pattern for integrating with external systems
+
+## Workflow
+1. Check rebuild_plan/00_prerequisites/ for context about the component you're working on
+2. Review existing code in the current monolithic version
+3. Check the code mapping in rebuild_plan/00_prerequisites/02_existing_code_mapping.md
+4. Implement according to component specifications
+5. Add unit tests for new functionality
+6. Update documentation as needed
+7. Verify changes against the risk management plan
+8. Track progress in rebuild_plan/progress_tracking.md
+
+## Git Workflow
+Follow the standardized Git workflow outlined in rebuild_plan/git_workflow.md:
+
+1. **Branch Strategy**:
+   - Work in feature branches created from the develop branch
+   - Name branches according to the pattern: feature/<feature-name>, bugfix/<bug-description>, etc.
+   - Keep branches focused on single features or fixes
+
+2. **Commit Standards**:
+   - Write descriptive commit messages with prefixes (feat:, fix:, docs:, etc.)
+   - Keep the first line under 50 characters
+   - Add detailed descriptions for complex changes
+
+3. **Code Review Process**:
+   - Create Pull Requests to the develop branch
+   - Ensure all tests pass before requesting review
+   - Address review comments with additional commits
+
+4. **Merging**:
+   - Use non-fast-forward merges (--no-ff) to maintain a clear history
+   - Merge to main only through release branches or hotfixes
+   - Tag all production releases with version numbers
+
+For detailed information, refer to rebuild_plan/git_workflow.md.
+
+## Import Guidelines
+- Import GTK modules first, then standard library, then app modules
+- Use absolute imports within the application
+- Avoid star imports
+- Group imports logically
+- Follow the pattern:
+  ```python
+  # GTK imports
+  import gi
+  gi.require_version("Gtk", "4.0")
+  from gi.repository import Gtk, Gdk, GLib
+
+  # Standard library imports
+  from typing import Optional, List, Dict
+  from pathlib import Path
+  import threading
+
+  # Application imports
+  from app.core.analyzer import Analyzer
+  from app.utils.logging import get_logger
+  ```
+
+## GTK 4.0 Best Practices
+- Use new GTK 4 event model with controllers instead of signal handlers
+- Follow GTK naming conventions for widgets and variables
+- Use CSS for styling rather than hardcoded appearance
+- Structure UI hierarchically with containers
+- Use GtkBuilder and UI files for complex interfaces
+- Always use GLib.idle_add when updating UI from background threads
+- Prefer GtkBox and GtkGrid for layouts
+- Use GtkOverlay for implementing the zoom preview functionality
+- Follow the drag-and-drop pattern in the GTK development guide
+
+## Image Processing Best Practices
+- Use Pillow for image manipulations
+- Process images in background threads
+- Cache processed images when appropriate
+- Use memory-efficient techniques for large images
+- For circular overlays, create transparent masks
+- Consider using Cairo for complex drawing operations
+- Implement proper error handling for image processing failures
+- Use thumbnail() rather than resize() to maintain aspect ratios
+
+## Gemini AI Integration
+- Follow the official Google Gemini API documentation
+- Implement proper error handling for API failures
+- Use a flexible prompt management system
+- Cache responses when appropriate
+- Implement fallback detection mechanisms
+- Handle API rate limits gracefully
+- Keep prompt templates separate from code
+
+## GTK Pitfalls to Avoid
+- Don't update UI directly from background threads, use GLib.idle_add
+- Don't block the main thread with long operations
+- Be careful with reference cycles in signal handlers
+- Remember GTK is not thread-safe - UI updates must happen in main thread
+- Don't use deprecated GTK 3.x APIs
+- Avoid manual memory management - use proper cleanup handlers
+- Don't hardcode widget sizes unless absolutely necessary
+
+## Rebuild Sequence
+- Follow the implementation sequence in rebuild_plan/06_implementation_strategy/01_implementation_sequence.md
+- Use rebuild_plan/06_implementation_strategy/00_starting_point.md as concrete guidance for first steps
+- Ensure each component is tested before moving to dependent components
+- Use adapter pattern when integrating with existing code
+- Follow the phased approach defined in the refactoring strategy
+- Update rebuild_plan/progress_tracking.md when components are completed
+
+## Working with Old Directory Structure
+When working with the old monolithic codebase structure:
+- Keep changes minimal and focused on critical fixes
+- Refer to rebuild_plan/00_prerequisites/02_existing_code_mapping.md to understand how old code maps to new components
+- Use adapter patterns to bridge between old and new code during transition
+- Follow the migration sequence in rebuild_plan/00_prerequisites/09_refactoring_strategy.md
+- Document any changes made to the old code structure for future reference
+- Test changes in both old and new structures where applicable
+
+## Documentation Update Guidelines
+
+After making any changes to the codebase, follow these documentation update rules:
+
+1. **When to Update Documentation**:
+   - After adding new functionality or components
+   - After modifying existing component interfaces
+   - After changing configuration options
+   - After restructuring code or refactoring
+   - After fixing significant bugs
+   - After changing Docker environment or build processes
+
+2. **What Documentation to Update**:
+   - Component documentation in relevant files
+   - README.md files in affected directories
+   - API documentation in docstrings
+   - User-facing documentation for UI or behavior changes
+   - Comments in complex code sections
+   - Docker and environment setup documentation if relevant
+
+3. **Docstring Requirements**:
+   - All public functions and classes must have docstrings
+   - Follow Google docstring format
+   - Include parameter and return type descriptions
+   - Document exceptions that may be raised
+   - Provide usage examples for complex functions
+
+4. **README Updates**:
+   - Keep the main README.md current with installation steps
+   - Update the directory structure section when files are added/moved
+   - Revise command examples if interfaces change
+   - Add new features to the feature list
+
+5. **Architecture Documentation**:
+   - Update component diagrams when dependencies change
+   - Revise data flow documentation for process changes
+   - Keep sequence diagrams in sync with code changes
+   - Document new design patterns when introduced
+
+6. **Documentation Commit Process**:
+   - Include documentation updates in the same commit as code changes
+   - Use "docs: " prefix in commit messages for pure documentation changes
+   - Reference updated documentation in PR descriptions
+   - Make documentation changes before marking a PR as ready for review
+
+7. **Update Cross-References**:
+   - Check for and update references to changed components in other docs
+   - Update implementation notes when interfaces change
+   - Revise diagrams that include modified components
+   - Update examples that demonstrate changed functionality
+
+8. **Docker Documentation**:
+   - Document any changes to Docker commands
+   - Update verification steps if environment requirements change
+   - Revise volume mount instructions if file paths change
+   - Update environment variable documentation
+
+Never treat documentation as an afterthought. Quality documentation is as important as the code itself.
+
+## Documentation References
+- GTK 4.0 Documentation: https://docs.gtk.org/gtk4/
+- Python GTK Tutorial: https://python-gtk-3-tutorial.readthedocs.io/
+- Gemini API Documentation: https://ai.google.dev/gemini-api/docs/
+- Pillow Documentation: https://pillow.readthedocs.io/
+- Docker Documentation: https://docs.docker.com/
+- Modern Python Project Structure: https://github.com/TezRomacH/python-package-template
+
+## For Additional Context
+- Check rebuild_plan/00_prerequisites/04_gtk_development_guide.md for GTK guidance
+- Review rebuild_plan/00_prerequisites/05_gemini_ai_integration.md for AI integration
+- See rebuild_plan/00_prerequisites/01_application_analysis.md for feature overview
+- Study rebuild_plan/00_prerequisites/08_component_dependency_diagram.md for architecture
+- Reference rebuild_plan/00_prerequisites/09_refactoring_strategy.md for safe code migration
+- Consult rebuild_plan/00_prerequisites/10_risk_management_plan.md for risk mitigation
+- Read rebuild_plan/testing/unattended_agent_guidelines.md for unattended operations
+- Review rebuild_plan/docker_integration_plan.md for Docker environment details
+- Check rebuild_plan/testing/headless_ui_testing.md for headless UI testing guidance
+- See rebuild_plan/starter_prompt.md for the autonomous debugging cycle
+- Refer to rebuild_plan/quick_reference.md for common operations and code snippets
+- Track implementation progress in rebuild_plan/progress_tracking.md
+
