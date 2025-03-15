@@ -375,671 +375,6 @@ X-GNOME-UsesNotifications=true
         except Exception as e:
             print(f"Warning: Could not create desktop file: {e}")
 
-    def show_notification(
-        self, message, timeout=3, use_desktop_notification=False, file_path=None
-    ):
-        """
-        Show a notification to the user.
-
-        Args:
-            message: The message to show
-            timeout: How long to show the message (in seconds)
-            use_desktop_notification: Whether to show a desktop notification (only for important events)
-            file_path: Optional path to the file that should be opened when the notification is clicked
-
-        Returns:
-            True if notification was shown, False otherwise
-        """
-        print(f"Notification: {message}")
-
-        # Always update the status bar regardless of notification type
-        self._update_status_bar(message)
-
-        # Clear status bar after timeout
-        if timeout > 0:
-            GLib.timeout_add_seconds(timeout, self._clear_status_bar)
-
-        # Only proceed with desktop notification if explicitly requested
-        if use_desktop_notification:
-            try:
-                # Make sure Notify is initialized
-                if not Notify.is_initted():
-                    Notify.init("Vorschau-Ersteller")
-
-                # Rate limiting based on message content
-                current_time = time.time()
-                cooldown_period = (
-                    1  # Default 1 second cooldown between identical notifications
-                )
-
-                # For the Gemini API failure message, use a longer cooldown
-                if "Gemini API failed to provide a valid bounding box" in message:
-                    cooldown_period = (
-                        10  # 10 seconds between Gemini API failure notifications
-                    )
-
-                # Check if we've shown this message recently
-                if message in self._notification_timestamps:
-                    last_time = self._notification_timestamps[message]
-                    if current_time - last_time < cooldown_period:
-                        return False  # Skip this notification, it's too soon
-
-                # Update timestamp for this message
-                self._notification_timestamps[message] = current_time
-
-                # If we already have a notification, close it first
-                if self.notification is not None:
-                    try:
-                        self.notification.close()
-                    except Exception:
-                        pass
-
-                # Choose appropriate icon based on context
-                icon = "image-x-generic"  # Default image icon
-                if "error" in message.lower():
-                    icon = "dialog-error"
-                elif "complete" in message.lower():
-                    icon = "dialog-information"
-
-                # Create a new notification
-                self.notification = Notify.Notification.new(
-                    "Preview Maker", message, icon
-                )
-
-                # Set timeout (in milliseconds)
-                if timeout > 0:
-                    self.notification.set_timeout(timeout * 1000)
-
-                # If a file path is provided, add an action to open the file
-                if file_path and os.path.exists(file_path):
-                    # Make file path absolute to ensure it can be opened from notification
-                    file_path = os.path.abspath(file_path)
-
-                    # Add an action to open the file
-                    self.notification.add_action(
-                        "open-file",  # Action ID
-                        "Open Image",  # Button text
-                        self._open_file_from_notification,  # Callback
-                        file_path,  # User data passed to callback
-                    )
-
-                # Show the notification
-                print(f"Sending desktop notification: {message}")
-                if file_path:
-                    print(f"Notification includes file path: {file_path}")
-                self.notification.show()
-
-                return True
-            except Exception as e:
-                print(f"Error showing notification: {e}")
-                return False
-
-        return True
-
-    def _open_file_from_notification(self, notification, action, file_path):
-        """Open a file when a notification action is clicked."""
-        print(f"Opening file: {file_path}")
-        try:
-            # Check if file exists before attempting to open
-            if not os.path.exists(file_path):
-                print(f"File not found: {file_path}")
-                self.show_notification(
-                    f"File not found: {os.path.basename(file_path)}", 3
-                )
-                return False
-
-            # Use the correct way to open files based on platform
-            if os.name == "nt":  # Windows
-                os.startfile(file_path)
-            elif os.name == "posix":  # Linux/macOS
-                # Use subprocess.run instead of Popen to wait for command to complete
-                # This helps with error detection
-                result = subprocess.run(["xdg-open", file_path], check=False)
-                if result.returncode != 0:
-                    print(f"Error opening file: xdg-open returned {result.returncode}")
-                    self.show_notification(
-                        f"Error opening file: {os.path.basename(file_path)}", 3
-                    )
-        except Exception as e:
-            print(f"Error opening file: {e}")
-            self.show_notification(f"Error opening file: {e}", 3)
-        return True
-
-    def _update_status_bar(self, message):
-        """Update the status bar with a message."""
-        if hasattr(self, "status_bar") and self.status_bar:
-            self.status_bar.set_text(message)
-        return False
-
-    def _clear_status_bar(self):
-        """Clear the status bar message."""
-        if hasattr(self, "status_bar") and self.status_bar:
-            self.status_bar.set_text("")
-
-    def _withdraw_notification(self, notification_id):
-        """Withdraw a notification by id if it exists."""
-        Notify.Notification.close(notification_id)
-
-    def _hide_notification(self):
-        """Hide the current notification if it exists."""
-        if self.notification:
-            self.notification.close()
-
-    def _setup_css_providers(self):
-        """Set up all CSS providers for the application.
-
-        This centralizes all CSS styling in one place.
-        """
-        # Create the main CSS provider
-        main_css_provider = Gtk.CssProvider()
-        main_css_provider.load_from_data(
-            b"""
-            .heading {
-                font-size: 20px;
-                font-weight: bold;
-            }
-            .description-text {
-                font-size: 16px;
-                line-height: 1.5;
-            }
-            .prompt-text {
-                font-size: 18px;
-                line-height: 1.5;
-            }
-            textview.placeholder {
-                color: alpha(#666666, 0.7);
-                font-style: italic;
-                font-size: 95%;
-            }
-            .desc-text {
-                font-size: 14px;
-                line-height: 1.3;
-            }
-            """,
-            -1,  # Length parameter, -1 means auto-detect length
-        )
-
-        # Apply the CSS provider to the display
-        display = Gdk.Display.get_default()
-        Gtk.StyleContext.add_provider_for_display(
-            display, main_css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
-        )
-
-        return main_css_provider
-
-    def _setup_prompt_text_view_css(self):
-        """Create and return a CSS provider for the placeholder styling.
-
-        Returns:
-            A configured CssProvider with placeholder styling
-        """
-        # We use the centralized CSS provider now, so just return None
-        # Placeholder styling is included in _setup_css_providers method
-        return None
-
-    def _setup_prompt_text_view(self, prompt_scroll, window, view_id=None):
-        """Setup a text view for prompt editing with placeholder functionality.
-
-        Args:
-            prompt_scroll: The ScrolledWindow that will contain the text view
-            window: The parent window for adding the click controller
-            view_id: Optional identifier for this text view (for multiple text views)
-
-        Returns:
-            The configured TextView widget
-        """
-        # Create a text view for the prompt with placeholder functionality
-        text_view = Gtk.TextView()
-        text_view.set_wrap_mode(Gtk.WrapMode.WORD)
-        text_view.set_top_margin(8)
-        text_view.set_bottom_margin(8)
-        text_view.set_left_margin(8)
-        text_view.set_right_margin(8)
-
-        # Ensure text view is focusable
-        text_view.set_focusable(True)
-
-        # Set appropriate dimensions
-        text_view.set_size_request(500, 100)
-
-        # Set up CSS for placeholder styling
-        self._setup_prompt_text_view_css()
-
-        # Get the default user prompt
-        try:
-            with open(DEFAULT_PROMPT_FILE, "r", encoding="utf-8") as f:
-                default_user_prompt = f.read()
-        except FileNotFoundError:
-            default_user_prompt = config.DEFAULT_USER_PROMPT
-
-        # Set up placeholder text and handling
-        buffer = text_view.get_buffer()
-
-        # Store references either in specific attributes or instance variables
-        if view_id:
-            setattr(self, f"prompt_entry_view_{view_id}", text_view)
-            setattr(self, f"prompt_buffer_{view_id}", buffer)
-            setattr(self, f"is_placeholder_visible_{view_id}", True)
-        else:
-            self.prompt_entry_view = text_view
-            self.prompt_buffer = buffer
-            self.is_placeholder_visible = True
-
-        # Use the same shortened placeholder format for consistency
-        first_sentence = default_user_prompt.split(".")[0]
-        if len(first_sentence) > 50:
-            short_placeholder = first_sentence[:50] + "..."
-        else:
-            short_placeholder = first_sentence
-
-        placeholder_text = f"[Standard] {short_placeholder}"
-
-        # Store the placeholder text
-        if view_id:
-            setattr(self, f"placeholder_text_{view_id}", placeholder_text)
-        else:
-            self.placeholder_text = placeholder_text
-
-        buffer.set_text(placeholder_text)
-        text_view.add_css_class("placeholder")
-
-        # Store a reference to the view ID with the widget
-        if view_id:
-            text_view.set_data("view_id", view_id)
-
-        # Add a direct click controller to the text view itself
-        text_click_controller = Gtk.GestureClick.new()
-        text_click_controller.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
-        text_click_controller.connect("pressed", self.on_textview_click)
-        text_view.add_controller(text_click_controller)
-
-        # Handle focus events with a focus controller
-        focus_controller = Gtk.EventControllerFocus.new()
-        focus_controller.connect("enter", self.on_prompt_focus_in)
-        focus_controller.connect("leave", self.on_prompt_focus_out)
-        text_view.add_controller(focus_controller)
-
-        # Add a click controller to the main window to handle unfocus
-        if window:
-            window_click_controller = Gtk.GestureClick.new()
-            window_click_controller.set_propagation_phase(Gtk.PropagationPhase.BUBBLE)
-            window_click_controller.connect("pressed", self.on_window_click)
-            window.add_controller(window_click_controller)
-
-        # Set the text view as the child of the scroll window
-        prompt_scroll.set_child(text_view)
-
-        return text_view
-
-    def on_auto_drop(self, drop_target, value, x, y):
-        """Handle automatic mode drop."""
-        self.show_notification("Automatischer Modus aktiviert")
-        self.process_dropped_file(value)
-        return True
-
-    def on_manual_drop(self, drop_target, value, x, y):
-        """Handle manual mode drop."""
-        self.show_notification("Manueller Modus aktiviert")
-        file_path = value.get_path()
-        if file_path:
-            # Set the current directory to the directory containing the dropped file
-            self.current_dir = os.path.dirname(file_path)
-            print(f"Manual mode: Setting current directory to {self.current_dir}")
-            self.open_manual_mode_window(file_path)
-        return True
-
-    def open_manual_mode_window(self, file_path):
-        """Open a window for manual mode editing."""
-        # Load the image
-        image = Image.open(file_path)
-        self.current_image = image
-        self.current_image_path = file_path
-
-        # Get image dimensions and store them
-        img_width, img_height = image.size
-        self.original_img_width = img_width
-        self.original_img_height = img_height
-        print(f"Loaded image with dimensions: {img_width}x{img_height}")
-
-        # Get screen dimensions
-        display = Gdk.Display.get_default()
-        monitor = display.get_monitors().get_item(0)
-        if monitor:
-            geometry = monitor.get_geometry()
-            screen_width = geometry.width
-            screen_height = geometry.height
-        else:
-            # Fallback values if we can't get screen dimensions
-            screen_width = 1920
-            screen_height = 1080
-
-        # Calculate appropriate window size (80% of screen size maximum)
-        max_width = int(screen_width * 0.8)
-        max_height = int(screen_height * 0.8)
-
-        # Determine if we need to scale the image
-        scale_factor = 1.0
-        window_width = img_width
-        window_height = img_height
-
-        if img_width > max_width or img_height > max_height:
-            # Scale down while preserving aspect ratio
-            width_ratio = max_width / img_width
-            height_ratio = max_height / img_height
-            scale_factor = min(width_ratio, height_ratio)
-
-            window_width = int(img_width * scale_factor)
-            window_height = int(img_height * scale_factor)
-
-        # Create a new window for manual mode with the updated title format
-        manual_window = Gtk.Window(title="Preview Maker - Manual")
-
-        # Make the window automatically fit content with a reasonable max size
-        if img_width > max_width or img_height > max_height:
-            # Set a maximum size that fits on screen
-            manual_window.set_default_size(window_width, window_height)
-        else:
-            # Let it size to content naturally, with a minimum reasonable size
-            manual_window.set_size_request(
-                min(600, img_width + 400), min(500, img_height + 100)
-            )
-
-        # Initialize normalized points to offscreen
-        self.selected_magnification_point_norm = (-1.0, -1.0)  # Offscreen
-        self.selected_preview_point_norm = (-1.0, -1.0)  # Offscreen
-
-        # Initialize pixel points (we'll still need these for some calculations)
-        self.selected_magnification_point = (-200, -200)
-        self.selected_preview_point = (-600, -600)
-
-        # Create a picture widget with keep-aspect-ratio enabled
-        picture = Gtk.Picture()
-        # Replace the deprecated set_keep_aspect_ratio with modern alternative
-        picture.set_content_fit(
-            Gtk.ContentFit.CONTAIN
-        )  # CONTAIN preserves aspect ratio
-        picture.set_can_shrink(True)  # Allow image to shrink when window resizes
-
-        # Load the image
-        pixbuf = GdkPixbuf.Pixbuf.new_from_file(file_path)
-        texture = Gdk.Texture.new_for_pixbuf(pixbuf)
-        picture.set_paintable(texture)
-
-        # Make the picture expand to fill available space
-        picture.set_hexpand(True)
-        picture.set_vexpand(True)
-
-        # Store the original image dimensions for coordinate mapping
-        self.display_width = img_width
-        self.display_height = img_height
-        self.display_scale = scale_factor
-
-        self.debug_print(
-            f"Display size: {img_width}x{img_height}, Scale: {scale_factor}"
-        )
-
-        # Create an overlay to draw circles on the image
-        overlay = Gtk.Overlay()
-        overlay.set_child(picture)
-
-        # Create a drawing area for circles
-        circle_area = Gtk.DrawingArea()
-
-        # Make the drawing area fill the entire overlay
-        circle_area.set_hexpand(True)
-        circle_area.set_vexpand(True)
-
-        # Set the drawing function
-        circle_area.set_draw_func(self.on_draw_circles)
-
-        # Store a reference to the circle_area for redrawing
-        self.circle_area = circle_area
-
-        # Add click gesture for mouse interaction
-        click_gesture = Gtk.GestureClick()
-        click_gesture.connect("pressed", self.on_image_click)
-        circle_area.add_controller(click_gesture)
-
-        overlay.add_overlay(circle_area)
-
-        # Add spinner for Gemini detection
-        self.spinner = Gtk.Spinner()
-        self.spinner.set_size_request(48, 48)
-        self.spinner.set_halign(Gtk.Align.CENTER)
-        self.spinner.set_valign(Gtk.Align.CENTER)
-        overlay.add_overlay(self.spinner)
-
-        # Create main layout as horizontal box
-        hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
-        hbox.set_margin_top(20)
-        hbox.set_margin_bottom(20)
-        hbox.set_margin_start(20)
-        hbox.set_margin_end(20)
-
-        # Create a container for the image with padding - LEFT SIDE
-        image_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        image_container.set_hexpand(True)
-        image_container.set_vexpand(True)
-        image_container.set_margin_start(12)
-        image_container.set_margin_end(12)
-        image_container.set_margin_top(12)
-        image_container.set_margin_bottom(12)
-
-        # Add a frame around the image overlay for better visual separation
-        image_frame = Gtk.Frame()
-        image_frame.set_child(overlay)
-        image_frame.set_hexpand(True)  # Let the image expand horizontally
-        image_frame.set_vexpand(True)  # Let the image expand vertically
-
-        image_container.append(image_frame)
-        hbox.append(image_container)
-
-        # Create a container for the controls with padding - RIGHT SIDE
-        controls_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        controls_container.set_margin_start(12)
-        controls_container.set_margin_end(12)
-        controls_container.set_margin_top(12)
-        controls_container.set_margin_bottom(12)
-
-        # Create a vertical box for all UI controls
-        controls_box = Gtk.Box(
-            orientation=Gtk.Orientation.VERTICAL, spacing=20
-        )  # Increased spacing
-        controls_box.set_size_request(350, -1)  # Set minimum width for controls
-        controls_box.set_vexpand(True)  # Make sure it uses full height
-        controls_box.set_margin_start(8)
-        controls_box.set_margin_end(8)
-        controls_box.set_margin_top(8)
-        controls_box.set_margin_bottom(8)
-
-        # Create description section
-        description_frame = Gtk.Frame()
-        description_frame.set_label("AI Description")
-
-        # Use ScrolledWindow for description to allow auto-sizing
-        description_scroll = Gtk.ScrolledWindow()
-        description_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
-        description_scroll.set_min_content_height(100)
-        description_scroll.set_propagate_natural_height(True)
-
-        self.description_label = Gtk.Label()
-        self.description_label.set_valign(Gtk.Align.START)
-        self.description_label.set_halign(Gtk.Align.START)
-        self.description_label.set_margin_start(12)
-        self.description_label.set_margin_end(12)
-        self.description_label.set_margin_top(12)
-        self.description_label.set_margin_bottom(12)
-        self.description_label.set_selectable(True)
-        self.description_label.set_wrap(True)
-        self.description_label.set_text("Run detection to see Gemini's description")
-        self.description_label.add_css_class("description-text")  # Modern GTK4 method
-        description_scroll.set_child(self.description_label)
-        description_frame.set_child(description_scroll)
-        controls_box.append(description_frame)
-
-        # Add prompt section with a large text area for customization
-        prompt_section = Gtk.Frame()
-        prompt_section.set_label("Detection Prompt")
-        prompt_section.set_margin_top(16)
-
-        # Create box for prompt controls
-        prompt_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
-        prompt_box.set_margin_start(12)
-        prompt_box.set_margin_end(12)
-        prompt_box.set_margin_top(12)
-        prompt_box.set_margin_bottom(12)
-
-        # Add a section for target type
-        target_section = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        target_section.set_margin_bottom(16)
-
-        target_label = Gtk.Label(label="Prompt:")
-        target_label.set_halign(Gtk.Align.START)
-        target_label.set_margin_end(10)
-        # Hide the label since the section is already called prompt
-        target_label.set_visible(False)
-        target_section.append(target_label)
-
-        # Create a scrollable container for the prompt text view
-        prompt_scroll = Gtk.ScrolledWindow()
-        prompt_scroll.set_vexpand(True)
-        prompt_scroll.set_hexpand(True)
-        prompt_scroll.set_min_content_height(100)  # Increased for better usability
-
-        # Add simple margins to the scroll window
-        prompt_scroll.set_margin_top(8)
-        prompt_scroll.set_margin_bottom(8)
-        prompt_scroll.set_margin_start(8)
-        prompt_scroll.set_margin_end(8)
-
-        # Use the helper method to setup the prompt text view
-        self._setup_prompt_text_view(prompt_scroll, manual_window)
-
-        target_section.append(prompt_scroll)
-
-        # Add the Rerun Detection button next to target type
-        rerun_button = Gtk.Button(label="Erkennung erneut ausführen")
-        rerun_button.connect("clicked", self.rerun_detection)
-        rerun_button.set_margin_start(8)
-        target_section.append(rerun_button)
-
-        prompt_box.append(target_section)
-
-        # Add an advanced settings button for API debug and custom prompt
-        advanced_button = Gtk.Button.new_with_label("Erweiterte Einstellungen")
-        advanced_button.set_halign(Gtk.Align.END)
-        advanced_button.connect("clicked", self.show_advanced_settings)
-        prompt_box.append(advanced_button)
-
-        # Add a note about targeting precision
-        targeting_note = Gtk.Label()
-        targeting_note.set_markup(
-            "<small><i>Für beste Ergebnisse, geben Sie ein einzelnes, eindeutiges Objekt im 'Zieltyp' an, "
-            "anstatt allgemeine Kategorien</i></small>"
-        )
-        targeting_note.set_halign(Gtk.Align.START)
-        targeting_note.set_margin_top(4)
-        prompt_box.append(targeting_note)
-
-        prompt_section.set_child(prompt_box)
-        controls_box.append(prompt_section)
-
-        # Get the default prompt from file for use in detection
-        try:
-            with open(DEFAULT_PROMPT_FILE, "r", encoding="utf-8") as f:
-                self.default_prompt = f.read()
-        except FileNotFoundError:
-            # Fallback to a basic prompt if file doesn't exist
-            self.default_prompt = (
-                "Please analyze this image and identify the most interesting {target_type} area. "
-                "Return coordinates of a bounding box as normalized values between 0 and 1 "
-                "in the format: x1,y1,x2,y2 where x1,y1 is the top-left corner."
-            )
-
-        # Add debug options section
-        debug_section = Gtk.Box(
-            orientation=Gtk.Orientation.VERTICAL, spacing=12
-        )  # Increased spacing
-        debug_section.set_margin_bottom(16)  # Increased margin
-
-        # Add a horizontal box for size controls
-        size_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-
-        # Size label
-        size_label = Gtk.Label(label="Auswahlgröße:")
-        size_label.set_halign(Gtk.Align.START)
-        size_label.set_size_request(100, -1)  # Fixed width for label
-        size_box.append(size_label)
-
-        # Add a scale for adjusting the selection circle size
-        size_scale = Gtk.Scale.new_with_range(
-            Gtk.Orientation.HORIZONTAL, 0.05, 0.3, 0.01
-        )
-        size_scale.set_value(self.selection_ratio)
-        size_scale.set_hexpand(True)
-        size_scale.set_tooltip_text("Adjust the size of the selection circle")
-        size_scale.connect("value-changed", self.on_selection_size_changed)
-        size_box.append(size_scale)
-
-        debug_section.append(size_box)
-
-        # Add a horizontal box for zoom controls
-        zoom_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-
-        # Zoom label
-        zoom_label = Gtk.Label(label="Vergrößerung:")
-        zoom_label.set_halign(Gtk.Align.START)
-        zoom_label.set_size_request(100, -1)  # Fixed width for label
-        zoom_box.append(zoom_label)
-
-        # Add a scale for adjusting the zoom factor
-        zoom_scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 1.5, 5.0, 0.1)
-        zoom_scale.set_value(self.zoom_factor)
-        zoom_scale.set_hexpand(True)
-        zoom_scale.set_tooltip_text("Adjust the zoom factor")
-        zoom_scale.connect("value-changed", self.on_zoom_factor_changed)
-        zoom_box.append(zoom_scale)
-
-        debug_section.append(zoom_box)
-
-        controls_box.append(debug_section)
-
-        # Add buttons with improved styling
-        button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
-        button_box.set_halign(Gtk.Align.END)
-        button_box.set_margin_top(8)
-
-        # Add explanatory text on the left side of the button box
-        help_text = Gtk.Label()
-        help_text.set_markup(
-            "<small>Linksklick: Vorschaupunkt setzen (blauer Kreis)\n"
-            "Strg+Linksklick: Vergrößerungspunkt setzen (grüner Kreis)</small>"
-        )
-        help_text.set_halign(Gtk.Align.START)
-        help_text.set_hexpand(True)
-        button_box.append(help_text)
-
-        # Create styled buttons
-        apply_button = Gtk.Button(label="Änderungen anwenden")
-        apply_button.connect("clicked", self.apply_manual_changes)
-        apply_button.add_css_class("suggested-action")  # Highlight this button
-
-        button_box.append(apply_button)
-
-        controls_box.append(button_box)
-
-        # Add the controls box to the main horizontal layout
-        hbox.append(controls_box)
-
-        manual_window.set_child(hbox)
-
-        # Show the window
-        manual_window.present()
-
-        # Automatically run detection when the window is shown
-        # Use a short delay to ensure the window is fully rendered
-        GLib.timeout_add(500, lambda: self.rerun_detection(rerun_button))
-
     def on_draw_circles(self, widget, cr, width, height):
         """Draw circles on the overlay using Cairo."""
         if not self.current_image:
@@ -1112,7 +447,8 @@ X-GNOME-UsesNotifications=true
                     f"DEBUG COORDS: Original mag point: ({self.original_mag_x}, {self.original_mag_y})"
                 )
                 print(
-                    f"DEBUG COORDS: Original image dimensions: {self.original_width}x{self.original_height}"
+                    f"DEBUG COORDS: Original image dimensions: "
+                    f"{self.original_width}x{self.original_height}"
                 )
                 print(
                     f"DEBUG COORDS: Display image dimensions: {img_width}x{img_height}"
@@ -2362,8 +1698,8 @@ X-GNOME-UsesNotifications=true
         if not text_view:
             return
 
-        # Get the view ID if set
-        view_id = text_view.get_data("view_id")
+        # Get the view ID if set using Python attribute instead of get_data
+        view_id = getattr(text_view, "view_id", None)
 
         # Get the appropriate placeholder state based on view ID
         if view_id:
@@ -2399,18 +1735,18 @@ X-GNOME-UsesNotifications=true
         if not text_view:
             return
 
-        # Get the view ID if set
-        view_id = text_view.get_data("view_id")
+        # Get the view ID if set using Python attribute
+        view_id = getattr(text_view, "view_id", None)
 
         # Get the buffer text
         buffer = text_view.get_buffer()
         start = buffer.get_start_iter()
         end = buffer.get_end_iter()
-        text = buffer.get_text(start, end, True)
+        text = buffer.get_text(start, end, False)
 
-        # When unfocused and empty, restore the placeholder text
+        # Check if empty - if so, restore placeholder
         if not text.strip():
-            # Get the appropriate placeholder text based on view ID
+            # Get the appropriate placeholder text
             if view_id:
                 placeholder_text = getattr(
                     self, f"placeholder_text_{view_id}", "[Standard]"
@@ -2440,8 +1776,8 @@ X-GNOME-UsesNotifications=true
         if not text_view:
             return False
 
-        # Get the view ID if set
-        view_id = text_view.get_data("view_id")
+        # Get the view ID if set using Python attribute
+        view_id = getattr(text_view, "view_id", None)
 
         # Ensure the text view gets focus
         text_view.grab_focus()
@@ -2459,53 +1795,718 @@ X-GNOME-UsesNotifications=true
             buffer.set_text("")
             text_view.remove_css_class("placeholder")
 
-            # Update the placeholder state
+            # Update placeholder state
             if view_id:
                 setattr(self, f"is_placeholder_visible_{view_id}", False)
             else:
                 self.is_placeholder_visible = False
 
-        # Allow event propagation
-        return False
+        return False  # Allow event propagation
 
-    def on_window_click(self, gesture, n_press, x, y):
-        """Handle click on the window to unfocus text view if needed.
+    def on_window_click(self, controller, n_press, x, y):
+        """
+        Handle click events on the window (for dismissing focus).
 
         Args:
-            gesture: The gesture controller that triggered the event
-            n_press: Number of presses (clicks)
-            x: X coordinate of the click
-            y: Y coordinate of the click
+            controller: The GestureClick controller
+            n_press: Number of presses
+            x: X-coordinate of the click
+            y: Y-coordinate of the click
         """
-        # Get the widget that was clicked - use proper PickFlags in GTK4
-        # The PickFlags.DEFAULT constant is not available in GTK4, use 0 instead
-        widget = gesture.get_widget().pick(x, y, 0)
+        # This method is primarily used to dismiss focus from other widgets
+        if hasattr(self, "window"):
+            self.window.grab_focus()
 
-        # Check if we have any prompt_entry_view with focus
-        prompt_view = None
+    def _setup_css_providers(self):
+        """Set up all CSS providers for the application.
 
-        # First check the default prompt_entry_view
-        if hasattr(self, "prompt_entry_view") and self.prompt_entry_view:
-            if self.prompt_entry_view.has_focus():
-                prompt_view = self.prompt_entry_view
+        This centralizes all CSS styling in one place.
+        """
+        # Create the main CSS provider
+        main_css_provider = Gtk.CssProvider()
+        main_css_provider.load_from_data(
+            b"""
+            .heading {
+                font-size: 20px;
+                font-weight: bold;
+            }
+            .description-text {
+                font-size: 16px;
+                line-height: 1.5;
+            }
+            .prompt-text {
+                font-size: 18px;
+                line-height: 1.5;
+            }
+            textview.placeholder {
+                color: alpha(#666666, 0.7);
+                font-style: italic;
+                font-size: 95%;
+            }
+            .desc-text {
+                font-size: 14px;
+                line-height: 1.3;
+            }
+            """,
+            -1,  # Length parameter, -1 means auto-detect length
+        )
 
-        # If we didn't find a focused view, check for any with the specified ID pattern
-        if not prompt_view:
-            for attr in dir(self):
-                if attr.startswith("prompt_entry_view_") and isinstance(
-                    getattr(self, attr), Gtk.TextView
-                ):
-                    view = getattr(self, attr)
-                    if view.has_focus():
-                        prompt_view = view
-                        break
+        # Apply the CSS provider to the display
+        display = Gdk.Display.get_default()
+        Gtk.StyleContext.add_provider_for_display(
+            display, main_css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+        )
 
-        # If we found a focused prompt view and it's not the clicked widget, unfocus it
-        if prompt_view and widget is not prompt_view:
-            # Use the gesture's widget's root window to grab focus
-            window = gesture.get_widget().get_root()
-            if window:
-                window.set_focus(None)
+        return main_css_provider
+
+    def on_auto_drop(self, drop_target, value, x, y):
+        """Handle automatic mode drop."""
+        self.show_notification("Automatischer Modus aktiviert")
+        self.process_dropped_file(value)
+        return True
+
+    def on_manual_drop(self, drop_target, value, x, y):
+        """Handle manual mode drop."""
+        self.show_notification("Manueller Modus aktiviert")
+        # Extract the file path from the GLocalFile object
+        file_path = value.get_path() if hasattr(value, "get_path") else str(value)
+        if file_path:
+            # Set the current directory to the directory containing the dropped file
+            self.current_dir = os.path.dirname(file_path)
+            print(f"Manual mode: Setting current directory to {self.current_dir}")
+            self.open_manual_mode_window(file_path)
+        return True
+
+    def show_notification(
+        self,
+        message,
+        timeout=3,
+        use_desktop_notification=False,
+        file_path=None,
+        is_error=False,
+    ):
+        """
+        Show a notification to the user.
+
+        Args:
+            message: The message to show
+            timeout: How long to show the message (in seconds)
+            use_desktop_notification: Whether to show a desktop notification (only for important events)
+            file_path: Optional path to the file that should be opened when the notification is clicked
+            is_error: Whether this is an error notification (for styling)
+
+        Returns:
+            True if notification was shown, False otherwise
+        """
+        # Rate limiting based on message content
+        current_time = time.time()
+        cooldown_period = 1  # Default 1 second cooldown between identical notifications
+
+        # For the Gemini API failure message, use a longer cooldown
+        if "Gemini API failed to provide a valid bounding box" in message:
+            cooldown_period = 10  # 10 seconds between Gemini API failure notifications
+
+        # For detection completion messages, use longer cooldown
+        if "Erkennung abgeschlossen" in message:
+            cooldown_period = 5  # 5 seconds between detection completion notifications
+
+        # Check if we've shown this message recently
+        if message in self._notification_timestamps:
+            last_time = self._notification_timestamps[message]
+            if current_time - last_time < cooldown_period:
+                return False  # Skip this notification, it's too soon
+
+        # Update timestamp for this message
+        self._notification_timestamps[message] = current_time
+
+        # Now show the notification
+        error_prefix = "ERROR: " if is_error else ""
+        print(f"Notification: {error_prefix}{message}")
+
+        # Update the status bar if we have one
+        self._update_status_bar(message)
+
+        return True
+
+    def _update_status_bar(self, message):
+        """Update the status bar with a message."""
+        if hasattr(self, "status_bar") and self.status_bar:
+            self.status_bar.set_text(message)
+        return False
+
+    def _clear_status_bar(self):
+        """Clear the status bar message."""
+        if hasattr(self, "status_bar") and self.status_bar:
+            self.status_bar.set_text("")
+        return False
+
+    def open_manual_mode_window(self, file_path):
+        """Open a window for manual mode editing."""
+        # Load the image
+        try:
+            image = Image.open(file_path)
+            self.current_image = image
+            self.current_image_path = file_path
+
+            # Get image dimensions and store them
+            img_width, img_height = image.size
+            self.original_img_width = img_width
+            self.original_img_height = img_height
+            print(f"Loaded image with dimensions: {img_width}x{img_height}")
+
+            # Create a new window for manual mode with the updated title format
+            manual_window = Gtk.Window(title="Preview Maker - Manual")
+
+            # Make the window automatically fit content with a reasonable max size
+            display = Gdk.Display.get_default()
+            monitor = display.get_monitors().get_item(0)
+            if monitor:
+                geometry = monitor.get_geometry()
+                screen_width = geometry.width
+                screen_height = geometry.height
+                max_width = int(screen_width * 0.8)
+                max_height = int(screen_height * 0.8)
+                window_width = min(max_width, img_width + 400)  # Add space for controls
+                window_height = min(max_height, img_height + 100)
+                manual_window.set_default_size(window_width, window_height)
+            else:
+                # Default size if we can't get screen dimensions
+                manual_window.set_default_size(1000, 600)
+
+            # Create the two-panel layout
+            image_container, controls_box = self._create_ui_layout(manual_window)
+
+            try:
+                # Create the image section with overlay
+                overlay, circle_area = self._create_image_section(
+                    image_container, image, manual_window
+                )
+
+                # Create all controls sections
+                self._create_description_section(controls_box)
+                rerun_button = self._create_prompt_section(controls_box, manual_window)
+                self._create_debug_section(controls_box)
+                self._add_help_and_buttons(controls_box)
+
+                # Show the window
+                manual_window.present()
+
+                # Automatically run detection once when the window is shown
+                # Use a short delay to ensure the window is fully rendered
+                # Using a source ID that we can store to avoid multiple timers
+                self._auto_detection_timer = GLib.timeout_add(
+                    500, self._run_initial_detection, rerun_button
+                )
+            except Exception as inner_e:
+                print(f"Error setting up UI components: {inner_e}")
+                # Still show the window with an error message
+                error_label = Gtk.Label(label=f"Error setting up UI: {inner_e}")
+                error_label.set_margin_top(20)
+                error_label.set_margin_bottom(20)
+                error_label.set_margin_start(20)
+                error_label.set_margin_end(20)
+                manual_window.set_child(error_label)
+                manual_window.present()
+                self.show_notification(f"Error setting up UI: {inner_e}", is_error=True)
+
+        except Exception as e:
+            print(f"Error opening image: {e}")
+            self.show_notification(f"Error opening image: {e}", is_error=True)
+
+    def _run_initial_detection(self, button):
+        """Run the initial detection once after window setup and then remove the timer."""
+        # Run the detection
+        if button and hasattr(self, "rerun_detection"):
+            self.rerun_detection(button)
+
+        # Remove the timer so it doesn't run again
+        if hasattr(self, "_auto_detection_timer"):
+            self._auto_detection_timer = None
+
+        # Return False to ensure the timeout doesn't repeat
+        return False
+
+    def _create_ui_layout(self, manual_window):
+        """
+        Create the two-panel layout structure for the manual mode window.
+
+        Args:
+            manual_window: The window to add the layout to
+
+        Returns:
+            tuple: (image_container, controls_box) - The two main panels
+        """
+        # Create main layout as horizontal box
+        hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
+        hbox.set_margin_top(20)
+        hbox.set_margin_bottom(20)
+        hbox.set_margin_start(20)
+        hbox.set_margin_end(20)
+
+        # Create a container for the image with padding - LEFT SIDE
+        image_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        image_container.set_hexpand(True)
+        image_container.set_vexpand(True)
+        image_container.set_margin_start(12)
+        image_container.set_margin_end(12)
+        image_container.set_margin_top(12)
+        image_container.set_margin_bottom(12)
+
+        hbox.append(image_container)
+
+        # Create a container for the controls with padding - RIGHT SIDE
+        controls_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        controls_container.set_margin_start(12)
+        controls_container.set_margin_end(12)
+        controls_container.set_margin_top(12)
+        controls_container.set_margin_bottom(12)
+
+        # Create a vertical box for all UI controls
+        controls_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=20)
+        controls_box.set_size_request(350, -1)  # Set minimum width for controls
+        controls_box.set_vexpand(True)  # Make sure it uses full height
+        controls_box.set_margin_start(8)
+        controls_box.set_margin_end(8)
+        controls_box.set_margin_top(8)
+        controls_box.set_margin_bottom(8)
+
+        controls_container.append(controls_box)
+        hbox.append(controls_container)
+
+        # Set the main horizontal box as the child of the window
+        manual_window.set_child(hbox)
+
+        return image_container, controls_box
+
+    def _create_image_section(self, image_container, image, manual_window):
+        """
+        Create the image display section with overlay for circle drawing.
+
+        Args:
+            image_container: The container to add the image section to
+            image: The PIL image to display
+            manual_window: The parent window
+
+        Returns:
+            tuple: (overlay, circle_area) - References to key UI components
+        """
+        # Get image dimensions
+        img_width, img_height = image.size
+
+        # Get screen dimensions
+        display = Gdk.Display.get_default()
+        monitor = display.get_monitors().get_item(0)
+        if monitor:
+            geometry = monitor.get_geometry()
+            screen_width = geometry.width
+            screen_height = geometry.height
+        else:
+            # Fallback values if we can't get screen dimensions
+            screen_width = 1920
+            screen_height = 1080
+
+        # Calculate appropriate window size (80% of screen size maximum)
+        max_width = int(screen_width * 0.8)
+        max_height = int(screen_height * 0.8)
+
+        # Determine if we need to scale the image
+        scale_factor = 1.0
+        if img_width > max_width or img_height > max_height:
+            # Scale down while preserving aspect ratio
+            width_ratio = max_width / img_width
+            height_ratio = max_height / img_height
+            scale_factor = min(width_ratio, height_ratio)
+
+        # Create a picture widget with keep-aspect-ratio enabled
+        picture = Gtk.Picture()
+        picture.set_content_fit(Gtk.ContentFit.CONTAIN)  # Preserve aspect ratio
+        picture.set_can_shrink(True)  # Allow image to shrink when window resizes
+
+        # Load the image
+        pixbuf = GdkPixbuf.Pixbuf.new_from_file(self.current_image_path)
+        texture = Gdk.Texture.new_for_pixbuf(pixbuf)
+        picture.set_paintable(texture)
+
+        # Make the picture expand to fill available space
+        picture.set_hexpand(True)
+        picture.set_vexpand(True)
+
+        # Initialize normalized points to offscreen
+        self.selected_magnification_point_norm = (-1.0, -1.0)  # Offscreen
+        self.selected_preview_point_norm = (-1.0, -1.0)  # Offscreen
+
+        # Initialize pixel points (we'll still need these for some calculations)
+        self.selected_magnification_point = (-200, -200)
+        self.selected_preview_point = (-600, -600)
+
+        # Store the original image dimensions for coordinate mapping
+        self.display_width = img_width
+        self.display_height = img_height
+        self.display_scale = scale_factor
+
+        self.debug_print(
+            f"Display size: {img_width}x{img_height}, Scale: {scale_factor}"
+        )
+
+        # Create an overlay to draw circles on the image
+        overlay = Gtk.Overlay()
+        overlay.set_child(picture)
+
+        # Create a drawing area for circles
+        circle_area = Gtk.DrawingArea()
+
+        # Make the drawing area fill the entire overlay
+        circle_area.set_hexpand(True)
+        circle_area.set_vexpand(True)
+
+        # Set the drawing function
+        circle_area.set_draw_func(self.on_draw_circles)
+
+        # Store a reference to the circle_area for redrawing
+        self.circle_area = circle_area
+
+        # Add click gesture for mouse interaction
+        click_gesture = Gtk.GestureClick()
+        click_gesture.connect("pressed", self.on_image_click)
+        circle_area.add_controller(click_gesture)
+
+        overlay.add_overlay(circle_area)
+
+        # Add spinner for Gemini detection
+        spinner = Gtk.Spinner()
+        spinner.set_size_request(48, 48)
+        spinner.set_halign(Gtk.Align.CENTER)
+        spinner.set_valign(Gtk.Align.CENTER)
+        self.spinner = spinner
+        overlay.add_overlay(spinner)
+
+        # Add a frame around the image overlay for better visual separation
+        image_frame = Gtk.Frame()
+        image_frame.set_child(overlay)
+        image_frame.set_hexpand(True)  # Let the image expand horizontally
+        image_frame.set_vexpand(True)  # Let the image expand vertically
+
+        image_container.append(image_frame)
+
+        return overlay, circle_area
+
+    def _create_description_section(self, controls_box):
+        """
+        Create the AI description section for the manual mode window.
+
+        Args:
+            controls_box: The container to add the description section to
+
+        Returns:
+            Gtk.Frame: The description section frame
+        """
+        # Create description section
+        description_frame = Gtk.Frame()
+        description_frame.set_label("AI Description")
+
+        # Use ScrolledWindow for description to allow auto-sizing
+        description_scroll = Gtk.ScrolledWindow()
+        description_scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        description_scroll.set_min_content_height(100)
+        description_scroll.set_propagate_natural_height(True)
+
+        self.description_label = Gtk.Label()
+        self.description_label.set_valign(Gtk.Align.START)
+        self.description_label.set_halign(Gtk.Align.START)
+        self.description_label.set_margin_start(12)
+        self.description_label.set_margin_end(12)
+        self.description_label.set_margin_top(12)
+        self.description_label.set_margin_bottom(12)
+        self.description_label.set_selectable(True)
+        self.description_label.set_wrap(True)
+        self.description_label.set_text("Run detection to see Gemini's description")
+        self.description_label.add_css_class("description-text")  # Modern GTK4 method
+        description_scroll.set_child(self.description_label)
+        description_frame.set_child(description_scroll)
+
+        controls_box.append(description_frame)
+
+        return description_frame
+
+    def _create_prompt_section(self, controls_box, window):
+        """
+        Create the prompt section for customizing detection prompts.
+
+        Args:
+            controls_box: The container to add the prompt section to
+            window: The parent window for event handling
+
+        Returns:
+            Gtk.Button: The rerun detection button
+        """
+        # Add prompt section with a large text area for customization
+        prompt_section = Gtk.Frame()
+        prompt_section.set_label("Detection Prompt")
+        prompt_section.set_margin_top(16)
+
+        # Create box for prompt controls
+        prompt_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        prompt_box.set_margin_start(12)
+        prompt_box.set_margin_end(12)
+        prompt_box.set_margin_top(12)
+        prompt_box.set_margin_bottom(12)
+
+        # Add a section for target type
+        target_section = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        target_section.set_margin_bottom(16)
+
+        target_label = Gtk.Label(label="Prompt:")
+        target_label.set_halign(Gtk.Align.START)
+        target_label.set_margin_end(10)
+        # Hide the label since the section is already called prompt
+        target_label.set_visible(False)
+        target_section.append(target_label)
+
+        # Create a scrollable container for the prompt text view
+        prompt_scroll = Gtk.ScrolledWindow()
+        prompt_scroll.set_vexpand(True)
+        prompt_scroll.set_hexpand(True)
+        prompt_scroll.set_min_content_height(100)  # Increased for better usability
+
+        # Add simple margins to the scroll window
+        prompt_scroll.set_margin_top(8)
+        prompt_scroll.set_margin_bottom(8)
+        prompt_scroll.set_margin_start(8)
+        prompt_scroll.set_margin_end(8)
+
+        # Use the helper method to setup the prompt text view
+        self._setup_prompt_text_view(prompt_scroll, window)
+
+        target_section.append(prompt_scroll)
+
+        # Add the Rerun Detection button next to target type
+        rerun_button = Gtk.Button(label="Erkennung erneut ausführen")
+        rerun_button.connect("clicked", self.rerun_detection)
+        rerun_button.set_margin_start(8)
+        target_section.append(rerun_button)
+
+        prompt_box.append(target_section)
+
+        # Add an advanced settings button for API debug and custom prompt
+        advanced_button = Gtk.Button.new_with_label("Erweiterte Einstellungen")
+        advanced_button.set_halign(Gtk.Align.END)
+        advanced_button.connect("clicked", self.show_advanced_settings)
+        advanced_button.set_margin_top(8)
+        prompt_box.append(advanced_button)
+
+        # Add a note about targeting precision
+        targeting_note = Gtk.Label()
+        targeting_note.set_markup(
+            "<small><i>Für beste Ergebnisse, geben Sie ein einzelnes, eindeutiges Objekt im 'Zieltyp' an, "
+            "anstatt allgemeine Kategorien</i></small>"
+        )
+        targeting_note.set_halign(Gtk.Align.START)
+        targeting_note.set_margin_top(4)
+        prompt_box.append(targeting_note)
+
+        # Set the prompt box as the child of the prompt section
+        prompt_section.set_child(prompt_box)
+        controls_box.append(prompt_section)
+
+        # Load the default prompt from file for use in detection
+        try:
+            with open(DEFAULT_PROMPT_FILE, "r", encoding="utf-8") as f:
+                self.default_prompt = f.read()
+        except FileNotFoundError:
+            # Fallback to a basic prompt if file doesn't exist
+            self.default_prompt = (
+                "Please analyze this image and identify the most interesting {target_type} area. "
+                "Return coordinates of a bounding box as normalized values between 0 and 1 "
+                "in the format: x1,y1,x2,y2 where x1,y1 is the top-left corner."
+            )
+
+        return rerun_button
+
+    def _create_debug_section(self, controls_box):
+        """
+        Create the debug controls section for the manual mode window.
+
+        Args:
+            controls_box: The container to add the debug section to
+
+        Returns:
+            Gtk.Box: The debug section
+        """
+        # Add debug options section
+        debug_section = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        debug_section.set_margin_bottom(16)  # Increased margin
+
+        # Add a horizontal box for size controls
+        size_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+
+        # Size label
+        size_label = Gtk.Label(label="Auswahlgröße:")
+        size_label.set_halign(Gtk.Align.START)
+        size_label.set_size_request(100, -1)  # Fixed width for label
+        size_box.append(size_label)
+
+        # Add a scale for adjusting the selection circle size
+        size_scale = Gtk.Scale.new_with_range(
+            Gtk.Orientation.HORIZONTAL, 0.05, 0.3, 0.01
+        )
+        size_scale.set_value(self.selection_ratio)
+        size_scale.set_hexpand(True)
+        size_scale.set_tooltip_text("Adjust the size of the selection circle")
+        size_scale.connect("value-changed", self.on_selection_size_changed)
+        size_box.append(size_scale)
+
+        debug_section.append(size_box)
+
+        # Add a horizontal box for zoom controls
+        zoom_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+
+        # Zoom label
+        zoom_label = Gtk.Label(label="Vergrößerung:")
+        zoom_label.set_halign(Gtk.Align.START)
+        zoom_label.set_size_request(100, -1)  # Fixed width for label
+        zoom_box.append(zoom_label)
+
+        # Add a scale for adjusting the zoom factor
+        zoom_scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 1.5, 5.0, 0.1)
+        zoom_scale.set_value(self.zoom_factor)
+        zoom_scale.set_hexpand(True)
+        zoom_scale.set_tooltip_text("Adjust the zoom factor")
+        zoom_scale.connect("value-changed", self.on_zoom_factor_changed)
+        zoom_box.append(zoom_scale)
+
+        debug_section.append(zoom_box)
+
+        controls_box.append(debug_section)
+
+        return debug_section
+
+    def _add_help_and_buttons(self, controls_box):
+        """
+        Add help text and action buttons to the controls panel.
+
+        Args:
+            controls_box: The container to add the help text and buttons to
+
+        Returns:
+            Gtk.Button: The apply button
+        """
+        # Add buttons with improved styling
+        button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
+        button_box.set_halign(Gtk.Align.END)
+        button_box.set_margin_top(8)
+
+        # Add explanatory text on the left side of the button box
+        help_text = Gtk.Label()
+        help_text.set_markup(
+            "<small>Linksklick: Vorschaupunkt setzen (blauer Kreis)\n"
+            "Strg+Linksklick: Vergrößerungspunkt setzen (grüner Kreis)</small>"
+        )
+        help_text.set_halign(Gtk.Align.START)
+        help_text.set_hexpand(True)
+        button_box.append(help_text)
+
+        # Create styled buttons
+        apply_button = Gtk.Button(label="Änderungen anwenden")
+        apply_button.connect("clicked", self.apply_manual_changes)
+        apply_button.add_css_class("suggested-action")  # Highlight this button
+
+        button_box.append(apply_button)
+
+        controls_box.append(button_box)
+
+        return apply_button
+
+    def _setup_prompt_text_view(self, prompt_scroll, window, view_id=None):
+        """Setup a text view for prompt editing with placeholder functionality.
+
+        Args:
+            prompt_scroll: The ScrolledWindow that will contain the text view
+            window: The parent window for adding the click controller
+            view_id: Optional identifier for this text view (for multiple text views)
+
+        Returns:
+            The configured TextView widget
+        """
+        # Create a text view for the prompt with placeholder functionality
+        text_view = Gtk.TextView()
+        text_view.set_wrap_mode(Gtk.WrapMode.WORD)
+        text_view.set_top_margin(8)
+        text_view.set_bottom_margin(8)
+        text_view.set_left_margin(8)
+        text_view.set_right_margin(8)
+
+        # Ensure text view is focusable
+        text_view.set_focusable(True)
+
+        # Set appropriate dimensions
+        text_view.set_size_request(500, 100)
+
+        # Get the default user prompt
+        try:
+            with open(DEFAULT_PROMPT_FILE, "r", encoding="utf-8") as f:
+                default_user_prompt = f.read()
+        except FileNotFoundError:
+            default_user_prompt = "Please analyze this image and identify the most interesting {target_type} area."
+
+        # Set up placeholder text and handling
+        buffer = text_view.get_buffer()
+
+        # Store references either in specific attributes or instance variables
+        if view_id:
+            setattr(self, f"prompt_entry_view_{view_id}", text_view)
+            setattr(self, f"prompt_buffer_{view_id}", buffer)
+            setattr(self, f"is_placeholder_visible_{view_id}", True)
+        else:
+            self.prompt_entry_view = text_view
+            self.prompt_buffer = buffer
+            self.is_placeholder_visible = True
+
+        # Use the same shortened placeholder format for consistency
+        first_sentence = default_user_prompt.split(".")[0]
+        if len(first_sentence) > 50:
+            short_placeholder = first_sentence[:50] + "..."
+        else:
+            short_placeholder = first_sentence
+
+        placeholder_text = f"[Standard] {short_placeholder}"
+
+        # Store the placeholder text
+        if view_id:
+            setattr(self, f"placeholder_text_{view_id}", placeholder_text)
+        else:
+            self.placeholder_text = placeholder_text
+
+        buffer.set_text(placeholder_text)
+        text_view.add_css_class("placeholder")
+
+        # Store a reference to the view ID with the widget using Python attribute instead of set_data
+        if view_id:
+            # Instead of text_view.set_data("view_id", view_id)
+            setattr(text_view, "view_id", view_id)
+
+        # Add a direct click controller to the text view itself
+        text_click_controller = Gtk.GestureClick.new()
+        text_click_controller.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+        text_click_controller.connect("pressed", self.on_textview_click)
+        text_view.add_controller(text_click_controller)
+
+        # Handle focus events with a focus controller
+        focus_controller = Gtk.EventControllerFocus.new()
+        focus_controller.connect("enter", self.on_prompt_focus_in)
+        focus_controller.connect("leave", self.on_prompt_focus_out)
+        text_view.add_controller(focus_controller)
+
+        # Add a click controller to the main window to handle unfocus
+        if window:
+            window_click_controller = Gtk.GestureClick.new()
+            window_click_controller.set_propagation_phase(Gtk.PropagationPhase.BUBBLE)
+            window_click_controller.connect("pressed", self.on_window_click)
+            window.add_controller(window_click_controller)
+
+        # Set the text view as the child of the scroll window
+        prompt_scroll.set_child(text_view)
+
+        return text_view
 
 
 def main():
