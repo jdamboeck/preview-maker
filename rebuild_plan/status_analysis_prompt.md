@@ -8,11 +8,11 @@ You will analyze the current status of the Preview Maker rebuild project, update
 ### Repository Analysis
 1. Analyze the git commit history to understand recent changes:
    ```bash
-   git log --oneline -n 10
+   git log --oneline -n 10 | cat
    ```
 2. Check branch status:
    ```bash
-   git branch -a
+   git branch -a | cat
    ```
 3. Check any uncommitted changes:
    ```bash
