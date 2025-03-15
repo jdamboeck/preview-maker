@@ -39,8 +39,8 @@ try:
 except ImportError:
     GENAI_AVAILABLE = False
     print(
-        "WARNING: google-generativeai package not installed. "
-        "Run 'pip install google-generativeai' to enable AI features."
+        "WARNUNG: google-generativeai-Paket nicht installiert. "
+        "Führen Sie 'pip install google-generativeai' aus, um KI-Funktionen zu aktivieren."
     )
 
 # Get paths from config
@@ -61,7 +61,7 @@ class PreviewMaker(Gtk.Application):
     def __init__(self):
         # Use 0 for FLAGS_NONE to avoid attribute error
         super().__init__(
-            application_id="org.example.previewmaker",
+            application_id="com.example.preview-maker",
             flags=0,
         )
         self.connect("activate", self.on_activate)
@@ -72,7 +72,7 @@ class PreviewMaker(Gtk.Application):
         self.add_action(show_action)
 
         # Initialize libnotify
-        Notify.init("Preview Maker")
+        Notify.init("Vorschau-Ersteller")
 
         self.current_image = None
         self.processed_image = None
@@ -183,7 +183,7 @@ class PreviewMaker(Gtk.Application):
 
         auto_icon = Gtk.Image.new_from_icon_name("media-playback-start")
         auto_icon.set_pixel_size(48)  # Larger icon
-        auto_label = Gtk.Label(label="Auto Mode")
+        auto_label = Gtk.Label(label="Automatischer Modus")
         auto_label.set_margin_top(10)
 
         auto_icon_box.append(auto_icon)
@@ -207,7 +207,7 @@ class PreviewMaker(Gtk.Application):
 
         manual_icon = Gtk.Image.new_from_icon_name("preferences-system")
         manual_icon.set_pixel_size(48)  # Larger icon
-        manual_label = Gtk.Label(label="Manual Mode")
+        manual_label = Gtk.Label(label="Manueller Modus")
         manual_label.set_margin_top(10)
 
         manual_icon_box.append(manual_icon)
@@ -351,7 +351,7 @@ X-GNOME-UsesNotifications=true
             try:
                 # Make sure Notify is initialized
                 if not Notify.is_initted():
-                    Notify.init("Preview Maker")
+                    Notify.init("Vorschau-Ersteller")
 
                 # Rate limiting based on message content
                 current_time = time.time()
@@ -480,13 +480,13 @@ X-GNOME-UsesNotifications=true
 
     def on_auto_drop(self, drop_target, value, x, y):
         """Handle automatic mode drop."""
-        self.show_notification("Automatic mode activated")
+        self.show_notification("Automatischer Modus aktiviert")
         self.process_dropped_file(value)
         return True
 
     def on_manual_drop(self, drop_target, value, x, y):
         """Handle manual mode drop."""
-        self.show_notification("Manual mode activated")
+        self.show_notification("Manueller Modus aktiviert")
         file_path = value.get_path()
         if file_path:
             # Set the current directory to the directory containing the dropped file
@@ -716,7 +716,7 @@ X-GNOME-UsesNotifications=true
         target_section.append(self.target_entry)
 
         # Add the Rerun Detection button next to target type
-        rerun_button = Gtk.Button(label="Rerun Detection")
+        rerun_button = Gtk.Button(label="Erkennung erneut ausführen")
         rerun_button.connect("clicked", self.rerun_detection)
         rerun_button.set_margin_start(8)
         target_section.append(rerun_button)
@@ -724,7 +724,7 @@ X-GNOME-UsesNotifications=true
         prompt_box.append(target_section)
 
         # Add an advanced settings button for API debug and custom prompt
-        advanced_button = Gtk.Button.new_with_label("Advanced Settings")
+        advanced_button = Gtk.Button.new_with_label("Erweiterte Einstellungen")
         advanced_button.set_halign(Gtk.Align.END)
         advanced_button.connect("clicked", self.show_advanced_settings)
         prompt_box.append(advanced_button)
@@ -732,8 +732,8 @@ X-GNOME-UsesNotifications=true
         # Add a note about targeting precision
         targeting_note = Gtk.Label()
         targeting_note.set_markup(
-            "<small><i>For best results, specify a single, distinct object in 'Target Type' "
-            "rather than general categories</i></small>"
+            "<small><i>Für beste Ergebnisse, geben Sie ein einzelnes, eindeutiges Objekt im 'Zieltyp' an, "
+            "anstatt allgemeine Kategorien</i></small>"
         )
         targeting_note.set_halign(Gtk.Align.START)
         targeting_note.set_margin_top(4)
@@ -764,7 +764,7 @@ X-GNOME-UsesNotifications=true
         size_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
 
         # Size label
-        size_label = Gtk.Label(label="Selection Size:")
+        size_label = Gtk.Label(label="Auswahlgröße:")
         size_label.set_halign(Gtk.Align.START)
         size_label.set_size_request(100, -1)  # Fixed width for label
         size_box.append(size_label)
@@ -785,7 +785,7 @@ X-GNOME-UsesNotifications=true
         zoom_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
 
         # Zoom label
-        zoom_label = Gtk.Label(label="Zoom:")
+        zoom_label = Gtk.Label(label="Vergrößerung:")
         zoom_label.set_halign(Gtk.Align.START)
         zoom_label.set_size_request(100, -1)  # Fixed width for label
         zoom_box.append(zoom_label)
@@ -810,15 +810,15 @@ X-GNOME-UsesNotifications=true
         # Add explanatory text on the left side of the button box
         help_text = Gtk.Label()
         help_text.set_markup(
-            "<small>Left click: Set preview point (blue circle)\n"
-            "Ctrl+Left click: Set magnification point (green circle)</small>"
+            "<small>Linksklick: Vorschaupunkt setzen (blauer Kreis)\n"
+            "Strg+Linksklick: Vergrößerungspunkt setzen (grüner Kreis)</small>"
         )
         help_text.set_halign(Gtk.Align.START)
         help_text.set_hexpand(True)
         button_box.append(help_text)
 
         # Create styled buttons
-        apply_button = Gtk.Button(label="Apply Changes")
+        apply_button = Gtk.Button(label="Änderungen anwenden")
         apply_button.connect("clicked", self.apply_manual_changes)
         apply_button.add_css_class("suggested-action")  # Highlight this button
 
@@ -1072,7 +1072,7 @@ X-GNOME-UsesNotifications=true
             cr.select_font_face("Sans", 0, 0)
             cr.set_font_size(12)
             cr.move_to(box_x1 + 5, box_y1 - 5)
-            cr.show_text("API Boundary")
+            cr.show_text("API-Grenze")
         elif self.debug_mode:
             # Draw an error message when we don't have a valid boundary box but debug mode is on
             cr.select_font_face("Sans", 0, 1)  # 1 = bold
@@ -1143,7 +1143,7 @@ X-GNOME-UsesNotifications=true
                 or y < y_offset
                 or y > (y_offset + image_display_height)
             ):
-                self.show_notification("Click outside image area")
+                self.show_notification("Klick außerhalb des Bildbereichs")
                 return
 
             # Adjust coordinates to account for letterboxing/pillarboxing
@@ -1163,7 +1163,7 @@ X-GNOME-UsesNotifications=true
 
             # Ensure coordinates are within image bounds (redundant check)
             if norm_x < 0 or norm_x > 1 or norm_y < 0 or norm_y > 1:
-                self.show_notification("Coordinates out of bounds")
+                self.show_notification("Koordinaten außerhalb des Bildbereichs")
                 return
 
             if (
@@ -1173,7 +1173,7 @@ X-GNOME-UsesNotifications=true
                 self.selected_magnification_point_norm = (norm_x, norm_y)
                 self.selected_magnification_point = (pixel_x, pixel_y)
                 self.show_notification(
-                    f"Magnification point set at ({pixel_x}, {pixel_y})"
+                    f"Vorschaupunkt gesetzt bei ({pixel_x}, {pixel_y})"
                 )
                 self.debug_print(
                     f"Magnification point selected: {self.selected_magnification_point}"
@@ -1186,14 +1186,16 @@ X-GNOME-UsesNotifications=true
                 # Store both normalized and pixel coordinates
                 self.selected_preview_point_norm = (norm_x, norm_y)
                 self.selected_preview_point = (pixel_x, pixel_y)
-                self.show_notification(f"Preview point set at ({pixel_x}, {pixel_y})")
+                self.show_notification(
+                    f"Vorschaupunkt gesetzt bei ({pixel_x}, {pixel_y})"
+                )
                 self.debug_print(
                     f"Preview point selected: {self.selected_preview_point}"
                 )
                 self.debug_print(f"Normalized: {self.selected_preview_point_norm}")
         else:
             # No image loaded
-            self.show_notification("No image loaded")
+            self.show_notification("Kein Bild geladen")
             return
 
         # Redraw the circles
@@ -1242,10 +1244,10 @@ X-GNOME-UsesNotifications=true
     def rerun_detection(self, button):
         """Rerun the detection process with the current settings."""
         if not self.current_image:
-            self.show_notification("No image loaded")
+            self.show_notification("Kein Bild geladen")
             return
 
-        self.show_notification("Rerunning detection...")
+        self.show_notification("Erkennung wird erneut ausgeführt...")
 
         # Format the prompt with the target type
         target_type = DEFAULT_TARGET_TYPE
@@ -1378,20 +1380,22 @@ X-GNOME-UsesNotifications=true
             if raw_box:
                 GLib.idle_add(
                     self.show_notification,
-                    "Detection complete: Successfully identified area of interest.",
+                    "Erkennung abgeschlossen: Interessensbereich erfolgreich identifiziert.",
                     2,
                     True,
                 )
             else:
                 GLib.idle_add(
                     self.show_notification,
-                    "Detection complete: Could not identify specific area.",
+                    "Erkennung abgeschlossen: Konnte keinen spezifischen Bereich identifizieren.",
                     2,
                     True,
                 )
         except Exception as e:
             print(f"Error in detection thread: {e}")
-            GLib.idle_add(self.show_notification, f"Error in detection: {e}", 5, True)
+            GLib.idle_add(
+                self.show_notification, f"Fehler bei der Erkennung: {e}", 5, True
+            )
 
     def apply_manual_changes(self, button):
         """Apply changes from manual mode."""
@@ -1476,7 +1480,7 @@ X-GNOME-UsesNotifications=true
             # Set the pixbuf to the picture widget
             self.output_picture.set_pixbuf(pixbuf)
 
-        self.show_notification("Changes applied")
+        self.show_notification("Änderungen angewendet")
 
     def _show_error(self, error_message):
         """Show an error message notification."""
@@ -1498,10 +1502,10 @@ X-GNOME-UsesNotifications=true
         """Show installation instructions for the AI package."""
         install_info = Gtk.Label()
         install_info.set_markup(
-            "<b>Installation Instructions:</b>\n"
-            "1. Install the Gemini API package: <tt>pip install google-generativeai</tt>\n"
-            "2. Set your API key in the environment: <tt>export GEMINI_API_KEY=your_key_here</tt>\n"
-            "   Or create a .env file with: <tt>GEMINI_API_KEY=your_key_here</tt>"
+            "<b>Installationsanweisungen:</b>\n"
+            "1. Installieren Sie das Gemini API-Paket: <tt>pip install google-generativeai</tt>\n"
+            "2. Setzen Sie Ihren API-Schlüssel in der Umgebung: <tt>export GEMINI_API_KEY=your_key_here</tt>\n"
+            "   Oder erstellen Sie eine .env-Datei mit: <tt>GEMINI_API_KEY=your_key_here</tt>"
         )
         install_info.set_wrap(True)
         install_info.set_halign(Gtk.Align.START)
@@ -1597,9 +1601,9 @@ X-GNOME-UsesNotifications=true
 
             if self.prompt_text_view:
                 self.prompt_text_view.get_buffer().set_text(config.DEFAULT_USER_PROMPT)
-            self.show_notification("User prompt reset to default")
+            self.show_notification("Benutzeraufforderung auf Standard zurückgesetzt")
         except Exception as e:
-            self.show_notification(f"Error resetting prompt: {e}")
+            self.show_notification(f"Fehler beim Zurücksetzen der Aufforderung: {e}")
 
     def save_prompt_as_default(self, button):
         """Save the current prompt as the default one."""
@@ -1613,9 +1617,9 @@ X-GNOME-UsesNotifications=true
             try:
                 with open(DEFAULT_PROMPT_FILE, "w", encoding="utf-8") as f:
                     f.write(prompt_text)
-                self.show_notification("User prompt saved as default")
+                self.show_notification("Benutzeraufforderung als Standard gespeichert")
             except Exception as e:
-                self.show_notification(f"Error saving prompt: {e}")
+                self.show_notification(f"Fehler beim Speichern der Aufforderung: {e}")
                 print(f"Error saving prompt: {e}")
 
     def _update_description_in_ui(self, description):
@@ -1636,7 +1640,7 @@ X-GNOME-UsesNotifications=true
 
                 # Highlight using a notification too
                 if hasattr(self, "show_notification"):
-                    self.show_notification("Received description from Gemini AI", 2)
+                    self.show_notification("Beschreibung von Gemini KI erhalten", 2)
             else:
                 self.description_label.set_text("No description available from AI")
         return False  # For GLib.idle_add
@@ -1669,14 +1673,14 @@ X-GNOME-UsesNotifications=true
 
         # API Boundary Label
         api_boundary_label = Gtk.Label()
-        api_boundary_label.set_markup("<b>API Detection Area</b>")
+        api_boundary_label.set_markup("<b>API-Einstellungen</b>")
         api_boundary_label.set_halign(Gtk.Align.START)
         api_boundary_label.set_margin_top(10)
         main_box.append(api_boundary_label)
 
         # API Boundary checkbox
         boundary_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=5)
-        boundary_checkbox = Gtk.CheckButton.new_with_label("Show API boundary box")
+        boundary_checkbox = Gtk.CheckButton.new_with_label("API-Grenzrahmen anzeigen")
         boundary_checkbox.set_tooltip_text(
             "Show the raw bounding box returned by Gemini API"
         )
@@ -1693,7 +1697,7 @@ X-GNOME-UsesNotifications=true
 
         # Prompt Editor Section
         prompt_label = Gtk.Label()
-        prompt_label.set_markup("<b>User Prompt Editor</b>")
+        prompt_label.set_markup("<b>Benutzerdefinierte Aufforderung</b>")
         prompt_label.set_halign(Gtk.Align.START)
         prompt_label.set_margin_top(20)
         main_box.append(prompt_label)
@@ -1701,8 +1705,9 @@ X-GNOME-UsesNotifications=true
         # Prompt description/info
         prompt_info_label = Gtk.Label()
         prompt_info_label.set_markup(
-            "Edit the user portion of the prompt used for detection. The technical formatting "
-            "instructions are managed separately.\nUse {target_type} as a placeholder for the target type."
+            "Bearbeiten Sie den Benutzeranteil der Aufforderung für die Erkennung. Die technischen "
+            "Formatierungsanweisungen werden separat verwaltet.\nVerwenden Sie {target_type} als "
+            "Platzhalter für den Zieltyp."
         )
         prompt_info_label.set_wrap(True)
         prompt_info_label.set_halign(Gtk.Align.START)
@@ -1738,19 +1743,19 @@ X-GNOME-UsesNotifications=true
         prompt_button_box.set_margin_top(10)
 
         # Reset prompt button
-        reset_button = Gtk.Button.new_with_label("Reset to Default")
+        reset_button = Gtk.Button.new_with_label("Auf Standard zurücksetzen")
         reset_button.connect("clicked", self.reset_custom_prompt, prompt_text_view)
         prompt_button_box.append(reset_button)
 
         # Save prompt button
-        save_button = Gtk.Button.new_with_label("Save Prompt")
+        save_button = Gtk.Button.new_with_label("Prompt speichern")
         save_button.connect("clicked", self.save_custom_prompt, prompt_text_view)
         prompt_button_box.append(save_button)
 
         main_box.append(prompt_button_box)
 
         # Close button at the bottom
-        close_button = Gtk.Button.new_with_label("Close")
+        close_button = Gtk.Button.new_with_label("Schließen")
         close_button.set_halign(Gtk.Align.END)
         close_button.set_margin_top(20)
         close_button.connect("clicked", lambda button: dialog.destroy())
@@ -1778,7 +1783,7 @@ X-GNOME-UsesNotifications=true
                     f.write(prompt_text)
                 self.show_notification("Custom prompt saved")
             except Exception as e:
-                self.show_notification(f"Error saving prompt: {e}")
+                self.show_notification(f"Fehler beim Speichern der Aufforderung: {e}")
         else:
             self.show_notification("Prompt is empty, not saving")
 
@@ -2060,13 +2065,13 @@ X-GNOME-UsesNotifications=true
             total = len(self.image_queue) + 1  # +1 for the current image
             progress = 1 - (len(self.image_queue) / total)
             percent = int(progress * 100)
-            self.show_notification(f"Processing images: {percent}% complete")
+            self.show_notification(f"Verarbeite {percent}% der Bilder")
 
             # Process the next image
             self.process_next_image()
         else:
             # Don't include file path here since it's a summary notification
-            self.show_notification("All images processed", 3, True)
+            self.show_notification("Alle Bilder verarbeitet", 3, True)
 
         if self.spinner:
             self.spinner.stop()
@@ -2076,7 +2081,7 @@ X-GNOME-UsesNotifications=true
         """Process the next image in the queue."""
         if not self.image_queue:
             self.show_notification(
-                "All images processed", 3, True
+                "Alle Bilder verarbeitet", 3, True
             )  # Use desktop notification for completion
             return
 
@@ -2089,13 +2094,13 @@ X-GNOME-UsesNotifications=true
         total = len(self.image_queue) + 1  # +1 for the current image
         progress = 1 - (len(self.image_queue) / total)
         percent = int(progress * 100)
-        self.show_notification(f"Processing images: {percent}% complete")
+        self.show_notification(f"Verarbeite {percent}% der Bilder")
 
     def process_dropped_file(self, file):
         """Process a dropped file or directory."""
         file_path = file.get_path()
         if not file_path:
-            self.show_notification("Invalid file")
+            self.show_notification("Ungültige Datei")
             return False
 
         # Remember the directory of the dropped file/folder
@@ -2119,12 +2124,12 @@ X-GNOME-UsesNotifications=true
                         self.image_queue.append(os.path.join(root, file_name))
 
             if not self.image_queue:
-                self.show_notification("No images found in directory")
+                self.show_notification("Keine Bilder im Verzeichnis gefunden")
                 return False
 
             # Start processing the first image
             count = len(self.image_queue)
-            self.show_notification(f"Processing {count} images...")
+            self.show_notification(f"Verarbeite {count} Bilder...")
 
             # Setup progress bar
             if self.progress_bar:
@@ -2144,7 +2149,7 @@ X-GNOME-UsesNotifications=true
             self.process_next_image()
             return True
 
-        self.show_notification("The file is not an image")
+        self.show_notification("Die Datei ist kein Bild")
         return False
 
     def _show_main_window(self, action, parameter):
