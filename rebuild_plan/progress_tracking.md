@@ -22,7 +22,7 @@ This document tracks the progress of the Preview Maker rebuild implementation. U
 ### Image Processing
 | Component | Status | Pull Request | Notes |
 |-----------|--------|--------------|-------|
-| Image Loading and Caching | Completed | - | All tests passing, async loading fixes implemented |
+| Image Loading and Caching | Completed | - | All tests passing, added cache_dir to config, fixed cache initialization issues |
 | Circular Mask Generation | Completed | - | All tests passing, API aligned with test expectations |
 | Image Transformation Utilities | Completed | - | resize_image and crop_image methods implemented |
 | Zoom Overlay Creation | Completed | - | Overlay functionality implemented |
