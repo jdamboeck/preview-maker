@@ -6,7 +6,7 @@ This directory contains the planning and setup materials for the Preview Maker r
 
 This project is hosted in a public GitHub repository:
 
-- **Repository URL**: [https://github.com/jdenen/preview-maker](https://github.com/jdenen/preview-maker)
+- **Repository URL**: [https://github.com/jdamboeck/preview-maker](https://github.com/jdamboeck/preview-maker)
 - **Main Branch**: Contains stable, production-ready code
 - **Develop Branch**: Integration branch for feature development
 
@@ -75,7 +75,7 @@ The Docker environment provides a consistent development experience across diffe
 
 1. **Clone the Repository**:
    ```bash
-   git clone https://github.com/jdenen/preview-maker.git
+   git clone https://github.com/jdamboeck/preview-maker.git
    cd preview-maker
    ```
 

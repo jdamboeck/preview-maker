@@ -19,7 +19,7 @@ The Docker environment for Preview Maker consists of the following components:
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/preview-maker.git
+git clone https://github.com/jdamboeck/preview-maker.git
 cd preview-maker
 
 # Build the Docker image
