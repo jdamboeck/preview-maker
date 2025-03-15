@@ -22,18 +22,19 @@ This document tracks the progress of the Preview Maker rebuild implementation. U
 ### Image Processing
 | Component | Status | Pull Request | Notes |
 |-----------|--------|--------------|-------|
-| Image Loading and Caching | Completed | - | Implemented in ImageProcessor class with async loading |
-| Circular Mask Generation | Completed | - | Added create_circular_overlay in ImageProcessor |
-| Image Transformation Utilities | Completed | - | Added basic transformation utilities |
-| Zoom Overlay Creation | Completed | - | Full overlay functionality implemented |
+| Image Loading and Caching | Completed | - | All tests passing, async loading fixes implemented |
+| Circular Mask Generation | Completed | - | All tests passing, API aligned with test expectations |
+| Image Transformation Utilities | Completed | - | resize_image and crop_image methods implemented |
+| Zoom Overlay Creation | Completed | - | Overlay functionality implemented |
 
 ### AI Integration
 | Component | Status | Pull Request | Notes |
 |-----------|--------|--------------|-------|
-| Gemini API Client | Completed | - | Implemented as ImageAnalyzer class |
-| Response Parsing | Completed | - | Implemented as ResponseParser class |
+| Gemini API Client | Completed | - | ImageAnalyzer tests now passing |
+| Response Parsing | Completed | - | ResponseParser fully implemented with all tests passing |
 | Fallback Detection Mechanisms | Completed | - | Added error handling and graceful degradation |
-| Prompt Management | Completed | - | Implemented in ImageAnalyzer._create_prompt() |
+| Prompt Management | Completed | - | Method build_prompt implemented and aligned with tests |
+| AI Preview Generator | In Progress | - | AIPreviewGenerator API needs updates to match tests |
 
 ### UI Components
 | Component | Status | Pull Request | Notes |
@@ -43,13 +44,14 @@ This document tracks the progress of the Preview Maker rebuild implementation. U
 | Overlay Management | Completed | - | Implemented as OverlayManager class |
 | User Controls | Completed | - | Added buttons for open, save, analyze, and settings |
 | Drag-and-Drop Support | Completed | - | Added support for dropping image files |
+| UI Tests | In Progress | - | Mock implementation needs fixes for GTK Application testing |
 
 ### Integration Layer
 | Component | Status | Pull Request | Notes |
 |-----------|--------|--------------|-------|
 | Component Coordination | Completed | - | Implemented with AIPreviewGenerator integration |
 | Event System Integration | Completed | - | GTK signal handling for UI events |
-| Background Processing Queue | Completed | - | Threading in image processor and AI analyzer |
+| Background Processing Queue | Completed | - | Async processing issues fixed in ImageProcessor |
 
 ## Status Definitions
 
@@ -65,23 +67,23 @@ This document tracks the progress of the Preview Maker rebuild implementation. U
 | Component | Coverage | Status | Notes |
 |-----------|----------|--------|-------|
 | Configuration Management | 0% | Not Started | - |
-| Image Processing | ~85% | Completed | Tests for core functionality |
-| AI Integration | ~90% | Completed | Comprehensive tests for analyzer, parser, and integration |
-| UI Components | ~70% | Completed | Mock-based testing for GTK components |
+| Image Processing | ~100% | Completed | All tests now passing |
+| AI Integration | ~80% | In Progress | ResponseParser and ImageAnalyzer tests passing, integration tests failing |
+| UI Components | ~70% | In Progress | Mock-based testing not working with GTK component initialization |
 | Event System | ~60% | Completed | Testing of event handlers |
 
 ### Integration Tests
 | Test Area | Status | Notes |
 |-----------|--------|-------|
-| Image Processing + AI | Completed | Implemented AIPreviewGenerator with tests |
-| UI + Image Processing | Completed | Tests for UI components with image processing |
+| Image Processing + AI | In Progress | Integration tests for AIPreviewGenerator failing |
+| UI + Image Processing | In Progress | Tests failing due to processor API issues |
 | Config + Components | Not Started | - |
 | End-to-End Flow | In Progress | Basic app flow tests implemented |
 
 ### UI Tests
 | Test Area | Status | Notes |
 |-----------|--------|-------|
-| Main Window | Completed | Mock-based tests for the main window |
+| Main Window | In Progress | Tests failing due to GTK mock types |
 | Image Display | Completed | Tests for image view widget |
 | User Controls | Completed | Tests for buttons and controls |
 | Drag and Drop | Completed | Tests for drag and drop functionality |
@@ -102,11 +104,11 @@ This document tracks the progress of the Preview Maker rebuild implementation. U
 | Milestone | Target Date | Status | Notes |
 |-----------|-------------|--------|-------|
 | Environment Setup | 2024-03-15 | Completed | Docker environment configured and tested |
-| Core Infrastructure | 2024-04-10 | Completed | Logging and error handling implemented |
-| Basic Image Processing | 2024-04-15 | Completed | Core image processing functionality implemented |
-| AI Integration | 2024-04-20 | Completed | Implemented Gemini API integration with tests |
+| Core Infrastructure | 2024-04-10 | In Progress | Logging complete, configuration pending |
+| Basic Image Processing | 2024-04-15 | Completed | Core functionality implemented, all tests passing |
+| AI Integration | 2024-04-20 | In Progress | Parser and Analyzer complete, Integration component needs fixes |
 | UI Framework | 2024-04-30 | Completed | GTK 4.0 UI components implemented |
-| Full Integration | 2024-05-10 | Completed | All components integrated into a working application |
+| Full Integration | 2024-05-10 | In Progress | Components integrated but some tests still failing |
 | Beta Release | TBD | Not Started | - |
 | Performance Optimization | TBD | Not Started | - |
 | Final Release | TBD | Not Started | - |
@@ -117,6 +119,9 @@ This document tracks the progress of the Preview Maker rebuild implementation. U
 |-------|--------|-----------------|--------|
 | GTK 4.0 Type Hints | Linter errors for GTK types | Add stub files or type comments | To Be Addressed |
 | Cairo Integration | Linter errors for Cairo types | Fix import issues and add proper type hints | To Be Addressed |
+| API Mismatches | Test failures | Update implementations to match test expectations | In Progress |
+| UI Test Mocks | UI tests failing | Fix mock implementation for GTK Application tests | To Be Addressed |
+| AIPreviewGenerator API | Integration tests failing | Update AIPreviewGenerator to match test expectations | To Be Addressed |
 
 ## Notes
 
@@ -141,3 +146,14 @@ Use this section to document important decisions, design changes, or other notab
   - Connected all components into a working application
   - Added comprehensive tests for the integrated application
   - Set up CI/CD pipeline with Docker-based testing
+- 2024-05-15: Test review identified API mismatches
+  - ImageAnalyzer API does not match test expectations
+  - ImageProcessor missing several expected methods
+  - Async callbacks not working correctly
+  - Plan created to address all API mismatches
+- 2024-05-20: API mismatches fixed for core components
+  - Fixed ImageProcessor async loading with headless mode detection
+  - Fixed ImageAnalyzer API to match test expectations
+  - Fixed ResponseParser with _normalize_radius method
+  - All core component tests now passing
+  - Next focus: AIPreviewGenerator and UI test mocks

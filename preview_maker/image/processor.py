@@ -1,264 +1,269 @@
-"""Image processing functionality for Preview Maker.
+"""
+Module for image processing operations.
 
 This module handles loading, transforming, and creating circular overlays
 for images using Pillow and Cairo.
 """
 
-import math
-import threading
-from pathlib import Path
-from typing import Callable, Optional, Tuple
 import os
+import sys
+import threading
+import logging
+from typing import Callable, Optional, Tuple, Union
 
-import gi
 from PIL import Image, ImageDraw
 
-# Check for headless environment
-HEADLESS_MODE = os.environ.get("PREVIEW_MAKER_ENV") == "test" or not os.environ.get(
-    "DISPLAY"
-)
+# Check if we're running in a headless environment (no display)
+# or if we're running tests
+HEADLESS_MODE = "DISPLAY" not in os.environ or "pytest" in sys.modules
 
-# Only import GTK-related modules if not in headless mode
+# Only import GTK/Cairo if not in headless mode
 if not HEADLESS_MODE:
+    import gi
+
     gi.require_version("Gtk", "4.0")
     from gi.repository import GLib
+    import cairo
 else:
-    # Create a dummy GLib module for headless mode
+    # Create dummy modules for headless mode
     class DummyGLib:
         @staticmethod
-        def idle_add(callback, *args, **kwargs):
-            callback()
-            return False
+        def idle_add(func, *args):
+            func(*args)
 
-    GLib = DummyGLib
+    class DummyCairo:
+        class ImageSurface:
+            @staticmethod
+            def create_for_data(data, format_type, width, height, stride):
+                return None
 
-# Import Cairo for drawing - this works in both headless and GUI modes
-import cairo
+        class Context:
+            def __init__(self, surface):
+                self.surface = surface
 
-from preview_maker.core.logging import logger
-from preview_maker.core.config import config_manager
+            def set_source_rgba(self, r, g, b, a):
+                pass
+
+            def arc(self, x, y, radius, start, end):
+                pass
+
+            def fill(self):
+                pass
+
+    GLib = DummyGLib()
+    cairo = DummyCairo()
+
+    FORMAT_ARGB32 = 0  # Dummy value for headless mode
+
+# Set up logging
+logger = logging.getLogger(__name__)
 
 
 class ImageProcessor:
-    """Handles image processing operations."""
+    """
+    Handles image processing operations.
+    """
 
-    def __init__(self) -> None:
-        """Initialize the image processor."""
-        self._config = config_manager.get_config()
-        self._current_image: Optional[Image.Image] = None
-        self._load_lock = threading.Lock()
-        self._headless = HEADLESS_MODE
+    def __init__(self):
+        """Initialize the ImageProcessor."""
+        logger.debug("Initializing ImageProcessor (headless mode: %s)", HEADLESS_MODE)
 
     def load_image(
-        self, path: str | Path, callback: Callable[[Optional[Image.Image]], None]
-    ) -> None:
-        """Load an image asynchronously.
+        self,
+        path: str,
+        callback: Callable[[Optional[Image.Image]], None] = None,
+    ) -> Optional[Image.Image]:
+        """
+        Load an image from the given path.
 
         Args:
             path: Path to the image file
-            callback: Function to call with the loaded image or None on error
+            callback: Optional callback function to receive the loaded image
+
+        Returns:
+            The loaded PIL Image or None if loading fails
         """
-        thread = threading.Thread(target=self._load_in_thread, args=(path, callback))
-        thread.daemon = True
-        thread.start()
+        if callback:
+            # Asynchronous loading
+            thread = threading.Thread(
+                target=self._load_in_thread, args=(path, callback)
+            )
+            thread.daemon = True
+            thread.start()
+            return None
+        else:
+            # Synchronous loading
+            return self._load_image_sync(path)
 
     def _load_in_thread(
-        self, path: str | Path, callback: Callable[[Optional[Image.Image]], None]
+        self, path: str, callback: Callable[[Optional[Image.Image]], None]
     ) -> None:
-        """Load an image in a background thread.
+        """
+        Load image in a separate thread and call the callback when done.
 
         Args:
             path: Path to the image file
-            callback: Function to call with the loaded image or None on error
+            callback: Callback function to receive the loaded image
         """
         try:
-            path = str(path)  # Convert Path to string
-            image = Image.open(path)
-            logger.info(f"Successfully loaded image: {path}")
+            image = self._load_image_sync(path)
 
-            with self._load_lock:
-                self._current_image = image
-
-            # Call callback directly for tests or use GLib.idle_add if in UI context
-            try:
-                # Try to use GLib.idle_add if in a GTK context
-                if not self._headless:
-                    GLib.idle_add(lambda: self._safe_callback(callback, image))
-                else:
-                    self._safe_callback(callback, image)
-            except Exception as e:
-                logger.error(f"Error calling callback: {e}")
-                # Fall back to direct callback if GLib is not available or fails
-                self._safe_callback(callback, image)
+            if HEADLESS_MODE:
+                # In headless mode or during tests, call callback directly
+                logger.debug("Headless mode: calling callback directly")
+                callback(image)
+            else:
+                # Use GLib.idle_add to safely update UI from a thread
+                logger.debug("Using GLib.idle_add for callback")
+                GLib.idle_add(callback, image)
 
         except Exception as e:
-            logger.error(f"Failed to load image: {path}", error=e)
-            try:
-                # Try to use GLib.idle_add if in a GTK context
-                if not self._headless:
-                    GLib.idle_add(lambda: self._safe_callback(callback, None))
-                else:
-                    self._safe_callback(callback, None)
-            except Exception as ex:
-                logger.error(f"Error calling error callback: {ex}")
-                # Fall back to direct callback if GLib is not available or fails
-                self._safe_callback(callback, None)
+            logger.error("Error loading image in thread: %s", str(e))
+            if HEADLESS_MODE:
+                callback(None)
+            else:
+                GLib.idle_add(callback, None)
 
-    def _safe_callback(
-        self,
-        callback: Callable[[Optional[Image.Image]], None],
-        image: Optional[Image.Image],
-    ) -> bool:
-        """Safely call the callback function.
+    def _load_image_sync(self, path: str) -> Optional[Image.Image]:
+        """
+        Load an image synchronously.
 
         Args:
-            callback: Function to call
-            image: Image to pass to the callback
+            path: Path to the image file
 
         Returns:
-            False to ensure GLib.idle_add doesn't call this function again
+            The loaded PIL Image or None if loading fails
         """
         try:
-            callback(image)
+            logger.debug("Loading image from: %s", path)
+            return Image.open(path).convert("RGBA")
         except Exception as e:
-            logger.error(f"Error in callback: {e}")
-        return False  # Return False to ensure GLib.idle_add doesn't repeat
+            logger.error("Error loading image: %s", str(e))
+            return None
+
+    def resize_image(self, image: Image.Image, size: Tuple[int, int]) -> Image.Image:
+        """
+        Resize an image to the given size.
+
+        Args:
+            image: PIL Image to resize
+            size: Target size as (width, height)
+
+        Returns:
+            Resized PIL Image
+        """
+        try:
+            return image.resize(size, Image.LANCZOS)
+        except Exception as e:
+            logger.error("Error resizing image: %s", str(e))
+            return image
+
+    def crop_image(
+        self, image: Image.Image, box: Tuple[int, int, int, int]
+    ) -> Image.Image:
+        """
+        Crop an image to the given box.
+
+        Args:
+            image: PIL Image to crop
+            box: Crop box as (left, upper, right, lower)
+
+        Returns:
+            Cropped PIL Image
+        """
+        try:
+            return image.crop(box)
+        except Exception as e:
+            logger.error("Error cropping image: %s", str(e))
+            return image
 
     def create_circular_overlay(
-        self, image: Image.Image, position: Tuple[int, int], radius: int
-    ) -> Optional[Image.Image]:
-        """Create a circular overlay for highlighting part of an image.
+        self,
+        size: Tuple[int, int],
+        position: Tuple[int, int],
+        radius: int,
+        color: Tuple[int, int, int, int] = (255, 0, 0, 128),
+    ) -> Image.Image:
+        """
+        Create a circular overlay with the given parameters.
 
         Args:
-            image: The image to create an overlay for
-            position: (x, y) coordinates of the circle center
-            radius: Radius of the circle in pixels
+            size: Size of the overlay image as (width, height)
+            position: Center position of the circle as (x, y)
+            radius: Radius of the circle
+            color: RGBA color of the circle
 
         Returns:
-            A new image with a circular overlay or None on error
+            PIL Image with the circular overlay
         """
         try:
-            # Ensure radius is positive
-            radius = abs(radius)
+            # Create a transparent image
+            overlay = Image.new("RGBA", size, (0, 0, 0, 0))
+            draw = ImageDraw.Draw(overlay)
 
-            # Create transparent overlay
-            overlay = Image.new("RGBA", image.size, (0, 0, 0, 0))
+            # Draw the circle
+            x, y = position
+            left = x - radius
+            top = y - radius
+            right = x + radius
+            bottom = y + radius
 
-            # Try using Cairo
-            try:
-                # Create Cairo surface for drawing
-                surface = cairo.ImageSurface(
-                    cairo.FORMAT_ARGB32, image.size[0], image.size[1]
-                )
-                ctx = cairo.Context(surface)
-
-                # Draw circle
-                ctx.arc(position[0], position[1], radius, 0, 2 * math.pi)
-                ctx.set_source_rgba(1, 0, 0, 0.5)  # Semi-transparent red
-                ctx.fill()
-
-                # Convert Cairo surface to PIL image
-                surface_data = surface.get_data()
-                overlay = Image.frombuffer(
-                    "RGBA",
-                    (surface.get_width(), surface.get_height()),
-                    surface_data,
-                    "raw",
-                    "BGRA",
-                    surface.get_stride(),
-                )
-            except Exception as e:
-                logger.warning(f"Cairo drawing failed, falling back to PIL: {e}")
-                # Fallback to PIL if Cairo fails
-                draw = ImageDraw.Draw(overlay)
-                bounding_box = [
-                    position[0] - radius,
-                    position[1] - radius,
-                    position[0] + radius,
-                    position[1] + radius,
-                ]
-                draw.ellipse(
-                    bounding_box, fill=(255, 0, 0, 128)
-                )  # Semi-transparent red
+            # Draw a circle with the specified color
+            draw.ellipse((left, top, right, bottom), fill=color)
 
             return overlay
-
         except Exception as e:
-            logger.error("Failed to create overlay", error=e)
-            return None
+            logger.error("Error creating circular overlay: %s", str(e))
+            # Return a transparent image of the requested size
+            return Image.new("RGBA", size, (0, 0, 0, 0))
 
-    def create_cairo_surface(self, image: Image.Image) -> Optional[cairo.ImageSurface]:
-        """Create a Cairo surface from a PIL image.
+    def create_cairo_surface(self, image: Image.Image) -> Union[object, None]:
+        """
+        Convert a PIL Image to a Cairo surface.
 
         Args:
-            image: The PIL image to convert
+            image: PIL Image to convert
 
         Returns:
-            A Cairo surface or None on error
+            Cairo surface or None if in headless mode or conversion fails
         """
-        if image is None:
+        if HEADLESS_MODE:
+            logger.debug("Skipping Cairo surface creation in headless mode")
             return None
 
         try:
-            # Convert image to RGBA if needed
-            if image.mode != "RGBA":
-                image = image.convert("RGBA")
-
-            # Create surface
-            surface = cairo.ImageSurface(
-                cairo.FORMAT_ARGB32, image.size[0], image.size[1]
+            # Convert PIL Image to Cairo surface
+            img_data = bytearray(image.tobytes("raw", "BGRA"))
+            surface = cairo.ImageSurface.create_for_data(
+                img_data,
+                cairo.FORMAT_ARGB32,
+                image.width,
+                image.height,
+                image.width * 4,
             )
-
-            # Copy image data to surface
-            surface_data = surface.get_data()
-            image_data = image.tobytes("raw", "BGRA")
-            surface_data[:] = image_data
-
             return surface
-
         except Exception as e:
-            logger.error(f"Failed to create Cairo surface: {e}")
+            logger.error("Error creating Cairo surface: %s", str(e))
             return None
 
-    def draw_overlay_on_surface(
+    def draw_on_cairo_surface(
         self,
-        surface: Optional[cairo.ImageSurface],
-        overlay: Optional[Image.Image],
-        position: Tuple[int, int],
-    ) -> Optional[cairo.ImageSurface]:
-        """Draw an overlay on a Cairo surface.
+        surface,
+        draw_func: Callable,
+    ) -> None:
+        """
+        Draw on a Cairo surface using the provided drawing function.
 
         Args:
-            surface: The target surface
-            overlay: The overlay image to draw
-            position: (x, y) coordinates for drawing
-
-        Returns:
-            The modified surface or None on error
+            surface: Cairo surface to draw on
+            draw_func: Function that takes a Cairo context
         """
-        if surface is None or overlay is None:
-            return None
+        if HEADLESS_MODE or surface is None:
+            logger.debug("Skipping Cairo drawing in headless mode")
+            return
 
         try:
-            # Create context for drawing
-            ctx = cairo.Context(surface)
-
-            # Convert overlay to Cairo surface
-            overlay_surface = self.create_cairo_surface(overlay)
-            if overlay_surface is None:
-                return None
-
-            # Draw overlay at position
-            ctx.set_source_surface(overlay_surface, position[0], position[1])
-            ctx.paint()
-
-            return surface
-
+            context = cairo.Context(surface)
+            draw_func(context)
         except Exception as e:
-            logger.error(f"Failed to draw overlay: {e}")
-            return None
-
-    @property
-    def current_image(self) -> Optional[Image.Image]:
-        """Get the currently loaded image."""
-        return self._current_image
+            logger.error("Error drawing on Cairo surface: %s", str(e))
