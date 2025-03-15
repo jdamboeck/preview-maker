@@ -204,6 +204,7 @@ To help with the rebuild implementation, use these additional resources:
 2. **Error Recovery**: Refer to `00_prerequisites/11_error_recovery_strategies.md` for solutions to common issues
 3. **Quick Reference**: Use `quick_reference.md` for code patterns and common commands
 4. **Agent Memory**: For AI agents, `agent_shortterm_memory.md` provides a compact development cycle guide
-5. **Progress Tracking**: Update `progress_tracking.md` as components are implemented
+5. **Status Analysis**: For tracking project progress, `status_analysis_prompt.md` helps analyze and plan next tasks
+6. **Progress Tracking**: Update `progress_tracking.md` as components are implemented
 
 These resources provide practical guidance to help implement the rebuild efficiently and consistently.
