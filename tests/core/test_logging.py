@@ -10,7 +10,12 @@ from pathlib import Path
 
 import pytest
 
-from preview_maker.core.logging import setup_logging, get_logger, logger
+from preview_maker.core.logging import (
+    setup_logging,
+    get_logger,
+    logger,
+    log_error_with_context,
+)
 
 
 class TestLogging:
