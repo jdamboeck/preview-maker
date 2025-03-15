@@ -6,7 +6,7 @@ This document outlines the Git workflow for the Preview Maker project, providing
 
 The Preview Maker project uses the following repository:
 
-- **GitHub Repository**: [https://github.com/jdenen/preview-maker](https://github.com/jdenen/preview-maker)
+- **GitHub Repository**: [https://github.com/jdamboeck/preview-maker](https://github.com/jdamboeck/preview-maker)
 - **Main Branch**: `main` - Contains the stable, production-ready code
 - **Development Branch**: `develop` - Integration branch for feature development
 
@@ -162,7 +162,7 @@ Consider using pre-commit hooks to ensure:
 
 ```bash
 # Clone the repository
-git clone https://github.com/jdenen/preview-maker.git
+git clone https://github.com/jdamboeck/preview-maker.git
 cd preview-maker
 
 # Set up your environment

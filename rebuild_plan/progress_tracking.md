@@ -4,7 +4,7 @@ This document tracks the progress of the Preview Maker rebuild implementation. U
 
 ## Repository Information
 
-- **Repository URL**: [https://github.com/jdenen/preview-maker](https://github.com/jdenen/preview-maker)
+- **Repository URL**: [https://github.com/jdamboeck/preview-maker](https://github.com/jdamboeck/preview-maker)
 - **Main Branch**: Contains stable, production-ready code
 - **Develop Branch**: Integration branch for feature development
 - **Git Workflow**: See [git_workflow.md](git_workflow.md) for branching and contribution guidelines
@@ -122,4 +122,4 @@ This document tracks the progress of the Preview Maker rebuild implementation. U
 Use this section to document important decisions, design changes, or other notable events during the implementation process.
 
 - 2024-07-XX: Project rebuild initiated with Docker environment setup
-- 2024-07-XX: Public GitHub repository created at https://github.com/jdenen/preview-maker
+- 2024-07-XX: Public GitHub repository created at https://github.com/jdamboeck/preview-maker

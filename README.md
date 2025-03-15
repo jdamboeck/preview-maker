@@ -14,7 +14,7 @@ A GTK-based application for analyzing images using Google's Gemini AI API. The t
 
 1. Clone the repository:
    ```
-   git clone https://github.com/jdenen/preview-maker.git
+   git clone https://github.com/jdamboeck/preview-maker.git
    cd preview-maker
    ```
 2. Ensure you have Python 3.8+ installed
@@ -163,6 +163,6 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Repository
 
-- **GitHub**: [https://github.com/jdenen/preview-maker](https://github.com/jdenen/preview-maker)
+- **GitHub**: [https://github.com/jdamboeck/preview-maker](https://github.com/jdamboeck/preview-maker)
 - **Main Branch**: Contains stable, production-ready code
 - **Develop Branch**: Integration branch for feature development
