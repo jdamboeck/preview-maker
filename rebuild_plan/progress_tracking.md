@@ -34,7 +34,7 @@ This document tracks the progress of the Preview Maker rebuild implementation. U
 | Response Parsing | Completed | - | ResponseParser fully implemented with all tests passing |
 | Fallback Detection Mechanisms | Completed | - | Added error handling and graceful degradation |
 | Prompt Management | Completed | - | Method build_prompt implemented and aligned with tests |
-| AI Preview Generator | In Progress | - | AIPreviewGenerator API needs updates to match tests |
+| AI Preview Generator | In Progress | - | 7/10 tests passing, 3 tests still failing due to mock issues |
 
 ### UI Components
 | Component | Status | Pull Request | Notes |
@@ -68,14 +68,14 @@ This document tracks the progress of the Preview Maker rebuild implementation. U
 |-----------|----------|--------|-------|
 | Configuration Management | 0% | Not Started | - |
 | Image Processing | ~100% | Completed | All tests now passing |
-| AI Integration | ~80% | In Progress | ResponseParser and ImageAnalyzer tests passing, integration tests failing |
+| AI Integration | ~85% | In Progress | ResponseParser and ImageAnalyzer tests passing, integration tests partially passing |
 | UI Components | ~70% | In Progress | Mock-based testing not working with GTK component initialization |
 | Event System | ~60% | Completed | Testing of event handlers |
 
 ### Integration Tests
 | Test Area | Status | Notes |
 |-----------|--------|-------|
-| Image Processing + AI | In Progress | Integration tests for AIPreviewGenerator failing |
+| Image Processing + AI | In Progress | 7/10 integration tests for AIPreviewGenerator passing |
 | UI + Image Processing | In Progress | Tests failing due to processor API issues |
 | Config + Components | Not Started | - |
 | End-to-End Flow | In Progress | Basic app flow tests implemented |
@@ -121,7 +121,7 @@ This document tracks the progress of the Preview Maker rebuild implementation. U
 | Cairo Integration | Linter errors for Cairo types | Fix import issues and add proper type hints | To Be Addressed |
 | API Mismatches | Test failures | Update implementations to match test expectations | In Progress |
 | UI Test Mocks | UI tests failing | Fix mock implementation for GTK Application tests | To Be Addressed |
-| AIPreviewGenerator API | Integration tests failing | Update AIPreviewGenerator to match test expectations | To Be Addressed |
+| AIPreviewGenerator API | Integration tests failing | Update AIPreviewGenerator to match test expectations | In Progress |
 
 ## Notes
 
@@ -157,3 +157,9 @@ Use this section to document important decisions, design changes, or other notab
   - Fixed ResponseParser with _normalize_radius method
   - All core component tests now passing
   - Next focus: AIPreviewGenerator and UI test mocks
+- 2024-05-21: Progress on AIPreviewGenerator
+  - Updated AIPreviewGenerator to match test expectations
+  - Fixed method signatures and parameter handling
+  - Added proper handling of mocked components in tests
+  - 7/10 integration tests now passing
+  - Remaining issues with mock expectations in tests

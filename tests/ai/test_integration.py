@@ -6,6 +6,7 @@ from pathlib import Path
 
 from PIL import Image
 from preview_maker.ai.integration import AIPreviewGenerator
+from preview_maker.ai.analyzer import ImageAnalyzer
 
 
 @pytest.fixture
@@ -224,7 +225,7 @@ class TestAIPreviewGenerator:
         # Replace the real analyzer with our mock
         generator.analyzer = mock_analyzer
         # Replace the real image processor with our mock
-        generator.image_processor = mock_image_processor
+        generator.processor = mock_image_processor
         return generator
 
     def test_init(self, mock_api_key):
@@ -232,7 +233,7 @@ class TestAIPreviewGenerator:
         generator = AIPreviewGenerator(api_key=mock_api_key)
         assert generator.api_key == mock_api_key
         assert generator.analyzer is not None
-        assert generator.image_processor is not None
+        assert generator.processor is not None
 
     def test_generate_preview(
         self, preview_generator, test_image_path, mock_image_processor
