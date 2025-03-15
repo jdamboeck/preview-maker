@@ -25,7 +25,7 @@ This document serves as a compact reference for agents working on the Preview Ma
   - [GTK Development Guide](00_prerequisites/04_gtk_development_guide.md) (for UI tasks)
   - [Gemini AI Integration](00_prerequisites/05_gemini_ai_integration.md) (for AI features)
 
-### 3. Check Git Workflow
+### 3. Check Git Workflow and create branch
 - Work in feature branches branched from `develop`
 - Branch naming: `feature/<feature-name>`, `bugfix/<bug-description>`
 - **Resources**: [Git Workflow](git_workflow.md)
@@ -91,6 +91,8 @@ This document serves as a compact reference for agents working on the Preview Ma
 - PR to `develop` branch
 - Ensure tests pass in CI
 - Reference any related issues
+- Use Github Cli to create
+
 
 ### 12. Plan Next Task
 - Consult progress tracking for next task
