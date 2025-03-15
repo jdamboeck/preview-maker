@@ -178,3 +178,117 @@ def test_create_preview_with_overlays(generator, sample_image):
         assert generator.processor.create_circular_overlay.call_count == 2
         generator.processor.create_circular_overlay.assert_any_call(ANY, (50, 50), 10)
         generator.processor.create_circular_overlay.assert_any_call(ANY, (150, 50), 15)
+
+
+class TestAIPreviewGenerator:
+    """Tests for the AIPreviewGenerator class."""
+
+    @pytest.fixture
+    def mock_api_key(self):
+        """Provide a mock API key for testing."""
+        return "mock_api_key_for_testing"
+
+    @pytest.fixture
+    def mock_analyzer(self, mock_api_key):
+        """Create a mock ImageAnalyzer."""
+        analyzer = MagicMock(spec=ImageAnalyzer)
+        # Mock the analyze_image method to return a sample result
+        analyzer.analyze_image.return_value = [
+            {"x": 100, "y": 100, "radius": 50, "confidence": 0.9}
+        ]
+        return analyzer
+
+    @pytest.fixture
+    def mock_image_processor(self):
+        """Create a mock ImageProcessor."""
+        processor = MagicMock()
+        # Mock the create_circular_overlay method to return a sample overlay
+        processor.create_circular_overlay.return_value = Image.new(
+            "RGBA", (200, 200), (0, 0, 0, 0)
+        )
+        return processor
+
+    @pytest.fixture
+    def test_image_path(self, tmp_path):
+        """Create a test image file."""
+        image_path = tmp_path / "test_image.jpg"
+        # Create a simple test image
+        image = Image.new("RGB", (200, 200), "white")
+        image.save(image_path)
+        return image_path
+
+    @pytest.fixture
+    def preview_generator(self, mock_api_key, mock_analyzer, mock_image_processor):
+        """Create an AIPreviewGenerator with mocked dependencies."""
+        generator = AIPreviewGenerator(api_key=mock_api_key)
+        # Replace the real analyzer with our mock
+        generator.analyzer = mock_analyzer
+        # Replace the real image processor with our mock
+        generator.image_processor = mock_image_processor
+        return generator
+
+    def test_init(self, mock_api_key):
+        """Test that the generator initializes correctly."""
+        generator = AIPreviewGenerator(api_key=mock_api_key)
+        assert generator.api_key == mock_api_key
+        assert generator.analyzer is not None
+        assert generator.image_processor is not None
+
+    def test_generate_preview(
+        self, preview_generator, test_image_path, mock_image_processor
+    ):
+        """Test generating a preview with mocked components."""
+        # Mock the load_image_sync method to return a test image
+        test_image = Image.new("RGB", (200, 200), "white")
+        mock_image_processor.load_image_sync.return_value = test_image
+
+        # Generate a preview
+        result = preview_generator.generate_preview(test_image_path)
+
+        # Check that the analyzer was called
+        preview_generator.analyzer.analyze_image.assert_called_once()
+
+        # Check that the image processor was used to create an overlay
+        mock_image_processor.create_circular_overlay.assert_called_once()
+
+        # Check that we got a result
+        assert result is not None
+
+    def test_generate_preview_with_no_highlights(
+        self, preview_generator, test_image_path, mock_image_processor
+    ):
+        """Test generating a preview when no highlights are found."""
+        # Mock the load_image_sync method to return a test image
+        test_image = Image.new("RGB", (200, 200), "white")
+        mock_image_processor.load_image_sync.return_value = test_image
+
+        # Mock the analyzer to return no highlights
+        preview_generator.analyzer.analyze_image.return_value = []
+
+        # Generate a preview
+        result = preview_generator.generate_preview(test_image_path)
+
+        # Check that the analyzer was called
+        preview_generator.analyzer.analyze_image.assert_called_once()
+
+        # Check that the image processor was not used to create an overlay
+        mock_image_processor.create_circular_overlay.assert_not_called()
+
+        # Check that we got None as a result (no highlights found)
+        assert result is None
+
+    def test_generate_preview_with_invalid_image(
+        self, preview_generator, mock_image_processor
+    ):
+        """Test generating a preview with an invalid image path."""
+        # Mock the load_image_sync method to return None (image not found)
+        mock_image_processor.load_image_sync.return_value = None
+
+        # Generate a preview with an invalid path
+        result = preview_generator.generate_preview("invalid/path/to/image.jpg")
+
+        # Check that the analyzer was not called
+        preview_generator.analyzer.analyze_image.assert_not_called()
+
+        # Check that we got None as a result
+        assert result is None

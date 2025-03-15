@@ -1,80 +1,82 @@
 """Logging configuration for Preview Maker.
 
-This module sets up application-wide logging using loguru with support for
-different log levels, file output, and structured logging.
+This module sets up the logging system for the application, providing
+a consistent logging interface across all components.
 """
 
+import logging
+import os
 import sys
 from pathlib import Path
-from typing import Optional, Union, Dict, Any
-from loguru import logger
+from typing import Optional, Union
+
+
+# Create a logger for the application
+logger = logging.getLogger("preview_maker")
 
 
 def setup_logging(
-    log_file: Optional[Union[str, Path]] = None,
-    log_level: str = "INFO",
-    rotation: str = "10 MB",
-    retention: str = "1 week",
-    format_string: Optional[str] = None,
+    level: int = logging.INFO, log_file: Optional[Union[str, Path]] = None
 ) -> None:
-    """Configure application logging.
+    """Set up the logging system for the application.
 
     Args:
-        log_file: Optional path to log file. If None, logs to stderr only.
-        log_level: Minimum log level to record (DEBUG, INFO, WARNING, ERROR, CRITICAL)
-        rotation: When to rotate log files (e.g., "10 MB", "1 day")
-        retention: How long to keep log files (e.g., "1 week", "1 month")
-        format_string: Optional custom format string for log messages
+        level: The logging level to use
+        log_file: Optional path to a log file
     """
-    # Remove default handler
-    logger.remove()
+    # Configure the root logger
+    root_logger = logging.getLogger()
+    root_logger.setLevel(level)
 
-    # Default format string if none provided
-    if format_string is None:
-        format_string = (
-            "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
-            "<level>{level: <8}</level> | "
-            "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> | "
-            "<level>{message}</level>"
-        )
+    # Remove any existing handlers
+    for handler in root_logger.handlers[:]:
+        root_logger.removeHandler(handler)
 
-    # Add stderr handler
-    logger.add(sys.stderr, format=format_string, level=log_level, colorize=True)
+    # Create a formatter
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
 
-    # Add file handler if log file specified
+    # Create a console handler
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(level)
+    console_handler.setFormatter(formatter)
+    root_logger.addHandler(console_handler)
+
+    # Create a file handler if a log file is specified
     if log_file:
         log_path = Path(log_file)
+
+        # Create the directory if it doesn't exist
         log_path.parent.mkdir(parents=True, exist_ok=True)
-        logger.add(
-            str(log_path),
-            format=format_string,
-            level=log_level,
-            rotation=rotation,
-            retention=retention,
-            compression="zip",
-        )
+
+        file_handler = logging.FileHandler(log_path)
+        file_handler.setLevel(level)
+        file_handler.setFormatter(formatter)
+        root_logger.addHandler(file_handler)
+
+    # Set the level for the preview_maker logger
+    logger.setLevel(level)
+
+    # Log the setup
+    logger.debug("Logging system initialized")
 
 
-def log_error_with_context(
-    error: Exception, context: Optional[Dict[str, Any]] = None
-) -> None:
-    """Log an error with additional context information.
+def get_logger(name: str) -> logging.Logger:
+    """Get a logger for a specific component.
 
     Args:
-        error: The exception to log
-        context: Optional dictionary of additional context information
+        name: The name of the component
+
+    Returns:
+        A logger instance for the component
     """
-    error_type = type(error).__name__
-    error_msg = str(error)
-
-    # Format context information if provided
-    context_str = ""
-    if context:
-        context_str = " | " + " | ".join(f"{k}={v}" for k, v in context.items())
-
-    logger.error(f"Error occurred: {error_type} - {error_msg}{context_str}")
-    logger.exception(error)
+    return logging.getLogger(f"preview_maker.{name}")
 
 
-# Configure default logging to stderr
-setup_logging()
+# Initialize with default settings if this module is imported directly
+if __name__ != "__main__":
+    # Only set up basic logging if it hasn't been configured yet
+    if not logger.handlers and not logging.getLogger().handlers:
+        setup_logging()

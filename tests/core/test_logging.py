@@ -1,11 +1,77 @@
-"""Unit tests for the logging module."""
+"""Tests for the logging module.
 
+This module contains tests for the logging configuration and functionality.
+"""
+
+import logging
 import os
 import tempfile
 from pathlib import Path
+
 import pytest
-from loguru import logger
-from preview_maker.core.logging import setup_logging, log_error_with_context
+
+from preview_maker.core.logging import setup_logging, get_logger, logger
+
+
+class TestLogging:
+    """Tests for the logging module."""
+
+    def test_setup_logging_default(self):
+        """Test setting up logging with default parameters."""
+        # Reset logging
+        root_logger = logging.getLogger()
+        for handler in root_logger.handlers[:]:
+            root_logger.removeHandler(handler)
+
+        # Set up logging with defaults
+        setup_logging()
+
+        # Check that the root logger has a handler
+        assert len(root_logger.handlers) > 0
+
+        # Check that the preview_maker logger is configured
+        assert logger.level == logging.INFO
+
+    def test_setup_logging_with_file(self):
+        """Test setting up logging with a log file."""
+        # Create a temporary file for logging
+        with tempfile.TemporaryDirectory() as temp_dir:
+            log_file = Path(temp_dir) / "test.log"
+
+            # Reset logging
+            root_logger = logging.getLogger()
+            for handler in root_logger.handlers[:]:
+                root_logger.removeHandler(handler)
+
+            # Set up logging with a file
+            setup_logging(level=logging.DEBUG, log_file=log_file)
+
+            # Check that the root logger has handlers
+            assert len(root_logger.handlers) > 0
+
+            # Check that the preview_maker logger is configured
+            assert logger.level == logging.DEBUG
+
+            # Log a message
+            logger.debug("Test debug message")
+            logger.info("Test info message")
+
+            # Check that the log file exists and contains the messages
+            assert log_file.exists()
+            log_content = log_file.read_text()
+            assert "Test debug message" in log_content
+            assert "Test info message" in log_content
+
+    def test_get_logger(self):
+        """Test getting a logger for a specific component."""
+        # Get a logger for a component
+        component_logger = get_logger("test_component")
+
+        # Check that the logger has the correct name
+        assert component_logger.name == "preview_maker.test_component"
+
+        # Check that the logger inherits the level from the parent
+        assert component_logger.level == logger.level
 
 
 @pytest.fixture
