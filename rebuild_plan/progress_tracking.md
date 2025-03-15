@@ -15,7 +15,7 @@ This document tracks the progress of the Preview Maker rebuild implementation. U
 | Component | Status | Pull Request | Notes |
 |-----------|--------|--------------|-------|
 | Configuration Management | Not Started | - | - |
-| Logging System | Completed | - | Basic logging setup with file and console handlers |
+| Logging System | In Progress | - | Basic logging setup with file and console handlers, tests failing |
 | Error Handling Framework | Completed | - | Error handling in all components |
 | Event Communication System | Not Started | - | - |
 
@@ -92,7 +92,7 @@ This document tracks the progress of the Preview Maker rebuild implementation. U
 
 | Documentation | Status | Notes |
 |---------------|--------|-------|
-| API Documentation | Completed | Added docstrings to all components |
+| API Documentation | Completed | - | Added docstrings to all components |
 | User Manual | Not Started | - |
 | Developer Guide | Not Started | - |
 | Architecture Overview | In Progress | Component dependency diagram implemented |
@@ -122,6 +122,8 @@ This document tracks the progress of the Preview Maker rebuild implementation. U
 | API Mismatches | Test failures | Update implementations to match test expectations | In Progress |
 | UI Test Mocks | UI tests failing | Fix mock implementation for GTK Application tests | To Be Addressed |
 | AIPreviewGenerator API | Integration tests failing | Update AIPreviewGenerator to match test expectations | In Progress |
+| Configuration Management | Tests failing | Implement ConfigManager with _reset_for_testing method | To Be Addressed |
+| Logging System | Tests failing | Update setup_logging to accept log_level parameter | To Be Addressed |
 
 ## Notes
 
@@ -163,3 +165,28 @@ Use this section to document important decisions, design changes, or other notab
   - Added proper handling of mocked components in tests
   - 7/10 integration tests now passing
   - Remaining issues with mock expectations in tests
+
+## Next Steps
+
+Based on our current progress, the following tasks should be prioritized:
+
+1. **Complete AIPreviewGenerator Implementation**
+   - Fix the remaining 3 failing tests by addressing mock expectations
+   - Ensure all integration tests pass
+
+2. **Implement Configuration Management**
+   - Create ConfigManager class with singleton pattern
+   - Add _reset_for_testing method for test isolation
+   - Implement configuration loading from file and environment
+
+3. **Update Logging System**
+   - Fix setup_logging to accept log_level parameter
+   - Ensure all logging tests pass
+
+4. **Fix UI Test Mocks**
+   - Update mock implementation for GTK Application tests
+   - Ensure UI tests can run in headless mode
+
+5. **Address Linter Errors**
+   - Add type hints for GTK and Cairo
+   - Fix remaining linter errors in the codebase
