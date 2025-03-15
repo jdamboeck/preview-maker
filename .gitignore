@@ -195,3 +195,17 @@ sample_kimono.jpg
 # Keep
 !prompts/user_prompt.md
 !prompts/technical_prompt.md
+
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS specific files
+.DS_Store
+Thumbs.db
+
+# Project specific
+config.toml
+gemini_api_key.txt
