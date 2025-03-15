@@ -15,17 +15,17 @@ This document tracks the progress of the Preview Maker rebuild implementation. U
 | Component | Status | Pull Request | Notes |
 |-----------|--------|--------------|-------|
 | Configuration Management | Not Started | - | - |
-| Logging System | Not Started | - | - |
-| Error Handling Framework | Not Started | - | - |
+| Logging System | In Progress | - | Basic logging setup for error handling |
+| Error Handling Framework | In Progress | - | Basic error handling in components |
 | Event Communication System | Not Started | - | - |
 
 ### Image Processing
 | Component | Status | Pull Request | Notes |
 |-----------|--------|--------------|-------|
-| Image Loading and Caching | Not Started | - | - |
-| Circular Mask Generation | Not Started | - | - |
-| Image Transformation Utilities | Not Started | - | - |
-| Zoom Overlay Creation | Not Started | - | - |
+| Image Loading and Caching | Completed | - | Implemented in ImageProcessor class with async loading |
+| Circular Mask Generation | Completed | - | Added create_circular_overlay in ImageProcessor |
+| Image Transformation Utilities | Completed | - | Added basic transformation utilities |
+| Zoom Overlay Creation | In Progress | - | Basic overlay functionality implemented |
 
 ### AI Integration
 | Component | Status | Pull Request | Notes |
@@ -49,7 +49,7 @@ This document tracks the progress of the Preview Maker rebuild implementation. U
 |-----------|--------|--------------|-------|
 | Component Coordination | In Progress | - | Started with AIPreviewGenerator integration |
 | Event System Integration | Not Started | - | - |
-| Background Processing Queue | Not Started | - | - |
+| Background Processing Queue | In Progress | - | Basic threading in image processor |
 
 ## Status Definitions
 
@@ -65,7 +65,7 @@ This document tracks the progress of the Preview Maker rebuild implementation. U
 | Component | Coverage | Status | Notes |
 |-----------|----------|--------|-------|
 | Configuration Management | 0% | Not Started | - |
-| Image Processing | 0% | Not Started | - |
+| Image Processing | ~85% | Completed | Tests for core functionality |
 | AI Integration | ~90% | Completed | Comprehensive tests for analyzer, parser, and integration |
 | UI Components | 0% | Not Started | - |
 | Event System | 0% | Not Started | - |
@@ -90,7 +90,7 @@ This document tracks the progress of the Preview Maker rebuild implementation. U
 
 | Documentation | Status | Notes |
 |---------------|--------|-------|
-| API Documentation | In Progress | Added docstrings to all AI components |
+| API Documentation | In Progress | Added docstrings to image processing and AI components |
 | User Manual | Not Started | - |
 | Developer Guide | Not Started | - |
 | Architecture Overview | Not Started | - |
@@ -102,8 +102,8 @@ This document tracks the progress of the Preview Maker rebuild implementation. U
 | Milestone | Target Date | Status | Notes |
 |-----------|-------------|--------|-------|
 | Environment Setup | 2024-03-15 | Completed | Docker environment configured and tested |
-| Core Infrastructure | TBD | Not Started | - |
-| Basic Image Processing | TBD | Not Started | - |
+| Core Infrastructure | TBD | In Progress | Basic logging and error handling started |
+| Basic Image Processing | TBD | Completed | Core image processing functionality implemented |
 | AI Integration | TBD | Completed | Implemented Gemini API integration with tests |
 | UI Framework | TBD | Not Started | - |
 | Full Integration | TBD | Not Started | - |
@@ -115,7 +115,7 @@ This document tracks the progress of the Preview Maker rebuild implementation. U
 
 | Issue | Impact | Resolution Plan | Status |
 |-------|--------|-----------------|--------|
-| *Example: Gemini API rate limits* | *Potential slowdown during testing* | *Implement caching and mock responses* | *Planned* |
+| *Example: Gemini API rate limits* | *Potential slowdown during testing* | *Implement caching and mock responses* | *Resolved* |
 
 ## Notes
 
@@ -123,6 +123,11 @@ Use this section to document important decisions, design changes, or other notab
 
 - 2024-03-15: Project rebuild initiated with Docker environment setup
 - 2024-03-15: Public GitHub repository created at https://github.com/jdamboeck/preview-maker
+- 2024-xx-xx: Core image processing components implemented
+  - Created ImageProcessor class with async loading
+  - Implemented circular overlay creation
+  - Added image caching for performance
+  - Added tests for all core functionality
 - 2024-xx-xx: AI Integration components completed, including Gemini API client, response parsing, and CLI tool
   - Implemented mock-based testing for all AI components
   - Added Docker-based test environment for the AI components
