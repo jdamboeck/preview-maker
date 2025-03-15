@@ -135,21 +135,52 @@ class PreviewMaker(Gtk.Application):
             print(*args, **kwargs)
 
     def on_activate(self, app):
-        """Initialize the application window and UI components."""
-        # Create the main window with updated title
-        self.window = Gtk.ApplicationWindow(
-            application=app, title="Preview Maker - Dropper"
-        )
+        """Primary method to set up the UI when the application starts."""
+        # Create the main window
+        self.window = Gtk.ApplicationWindow(application=app)
+        self.window.set_title("Preview Maker")
+        self.window.set_default_size(800, 600)
 
-        # Measure content first, then fix the window size
-        self.window.set_resizable(False)
+        # Initialize libnotify again here to ensure it's ready
+        Notify.init("Vorschau-Ersteller")
+
+        # Set up all CSS providers
+        self._setup_css_providers()
 
         # Check if Gemini AI is available and show notification if not
         if not GENAI_AVAILABLE:
             # Don't show initial notification, but keep the code for setting up
             print("Google Generative AI not available - not showing notification")
-            # Don't schedule notification to show after window is displayed
-            # GLib.timeout_add(1000, self._show_ai_installation_instructions)
+
+        # Create the main container
+        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        self.window.set_child(main_box)
+
+        # Create header with title and instructions
+        header_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        header_box.set_margin_top(20)
+        header_box.set_margin_bottom(20)
+        header_box.set_margin_start(20)
+        header_box.set_margin_end(20)
+
+        title = Gtk.Label(label="Preview Maker")
+        title.add_css_class("heading")
+        title.set_halign(Gtk.Align.CENTER)
+        title.set_margin_bottom(10)
+        header_box.append(title)
+
+        instructions = Gtk.Label()
+        instructions.set_markup(
+            "Drag and drop image files to create previews.\n"
+            "<small>Automatic mode creates previews immediately. "
+            "Manual mode allows fine-tuning.</small>"
+        )
+        instructions.add_css_class("desc-text")
+        instructions.set_halign(Gtk.Align.CENTER)
+        instructions.set_justify(Gtk.Justification.CENTER)
+        header_box.append(instructions)
+
+        main_box.append(header_box)
 
         # Create a vertical box for the layout
         vbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
@@ -158,7 +189,7 @@ class PreviewMaker(Gtk.Application):
         vbox.set_margin_start(10)
         vbox.set_margin_end(10)
         vbox.set_vexpand(True)
-        self.window.set_child(vbox)
+        main_box.append(vbox)
 
         # Create a horizontal box for the drop areas
         drop_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=20)
@@ -268,6 +299,28 @@ class PreviewMaker(Gtk.Application):
 
         # Force size calculation
         GLib.timeout_add(100, self._fix_window_size)
+
+        # Add CSS provider for basic styling
+        css_provider = Gtk.CssProvider()
+        css_provider.load_from_data(
+            b"""
+            .heading {
+                font-size: 20px;
+                font-weight: bold;
+            }
+            .desc-text {
+                font-size: 14px;
+                line-height: 1.3;
+            }
+            """,
+            -1,  # Length parameter, -1 means auto-detect length
+        )
+
+        # Apply the CSS provider to the display
+        display = Gdk.Display.get_default()
+        Gtk.StyleContext.add_provider_for_display(
+            display, css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+        )
 
     def _fix_window_size(self):
         """Fix the window size after initial layout."""
@@ -472,26 +525,65 @@ X-GNOME-UsesNotifications=true
         if self.notification:
             self.notification.close()
 
-    def _setup_prompt_text_view_css(self):
-        """Create and return a CSS provider for the placeholder styling."""
-        css_provider = Gtk.CssProvider()
-        css_provider.load_from_data(
+    def _setup_css_providers(self):
+        """Set up all CSS providers for the application.
+
+        This centralizes all CSS styling in one place.
+        """
+        # Create the main CSS provider
+        main_css_provider = Gtk.CssProvider()
+        main_css_provider.load_from_data(
             b"""
+            .heading {
+                font-size: 20px;
+                font-weight: bold;
+            }
+            .description-text {
+                font-size: 16px;
+                line-height: 1.5;
+            }
+            .prompt-text {
+                font-size: 18px;
+                line-height: 1.5;
+            }
             textview.placeholder {
                 color: alpha(#666666, 0.7);
                 font-style: italic;
                 font-size: 95%;
             }
-            """
+            .desc-text {
+                font-size: 14px;
+                line-height: 1.3;
+            }
+            """,
+            -1,  # Length parameter, -1 means auto-detect length
         )
-        return css_provider
 
-    def _setup_prompt_text_view(self, prompt_scroll, window):
+        # Apply the CSS provider to the display
+        display = Gdk.Display.get_default()
+        Gtk.StyleContext.add_provider_for_display(
+            display, main_css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+        )
+
+        return main_css_provider
+
+    def _setup_prompt_text_view_css(self):
+        """Create and return a CSS provider for the placeholder styling.
+
+        Returns:
+            A configured CssProvider with placeholder styling
+        """
+        # We use the centralized CSS provider now, so just return None
+        # Placeholder styling is included in _setup_css_providers method
+        return None
+
+    def _setup_prompt_text_view(self, prompt_scroll, window, view_id=None):
         """Setup a text view for prompt editing with placeholder functionality.
 
         Args:
             prompt_scroll: The ScrolledWindow that will contain the text view
             window: The parent window for adding the click controller
+            view_id: Optional identifier for this text view (for multiple text views)
 
         Returns:
             The configured TextView widget
@@ -504,40 +596,60 @@ X-GNOME-UsesNotifications=true
         text_view.set_left_margin(8)
         text_view.set_right_margin(8)
 
+        # Ensure text view is focusable
+        text_view.set_focusable(True)
+
         # Set appropriate dimensions
         text_view.set_size_request(500, 100)
 
-        # Apply the CSS provider to the text view
-        css_provider = self._setup_prompt_text_view_css()
-        context = text_view.get_style_context()
-        context.add_provider(css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        # Set up CSS for placeholder styling
+        self._setup_prompt_text_view_css()
 
         # Get the default user prompt
         try:
             with open(DEFAULT_PROMPT_FILE, "r", encoding="utf-8") as f:
-                self.default_user_prompt = f.read()
+                default_user_prompt = f.read()
         except FileNotFoundError:
-            self.default_user_prompt = config.DEFAULT_USER_PROMPT
+            default_user_prompt = config.DEFAULT_USER_PROMPT
 
         # Set up placeholder text and handling
         buffer = text_view.get_buffer()
-        self.prompt_buffer = buffer
-        self.prompt_entry_view = text_view
-        self.is_placeholder_visible = True
+
+        # Store references either in specific attributes or instance variables
+        if view_id:
+            setattr(self, f"prompt_entry_view_{view_id}", text_view)
+            setattr(self, f"prompt_buffer_{view_id}", buffer)
+            setattr(self, f"is_placeholder_visible_{view_id}", True)
+        else:
+            self.prompt_entry_view = text_view
+            self.prompt_buffer = buffer
+            self.is_placeholder_visible = True
 
         # Use the same shortened placeholder format for consistency
-        first_sentence = self.default_user_prompt.split(".")[0]
+        first_sentence = default_user_prompt.split(".")[0]
         if len(first_sentence) > 50:
             short_placeholder = first_sentence[:50] + "..."
         else:
             short_placeholder = first_sentence
-        self.placeholder_text = f"[Standard] {short_placeholder}"
 
-        buffer.set_text(self.placeholder_text)
+        placeholder_text = f"[Standard] {short_placeholder}"
+
+        # Store the placeholder text
+        if view_id:
+            setattr(self, f"placeholder_text_{view_id}", placeholder_text)
+        else:
+            self.placeholder_text = placeholder_text
+
+        buffer.set_text(placeholder_text)
         text_view.add_css_class("placeholder")
+
+        # Store a reference to the view ID with the widget
+        if view_id:
+            text_view.set_data("view_id", view_id)
 
         # Add a direct click controller to the text view itself
         text_click_controller = Gtk.GestureClick.new()
+        text_click_controller.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
         text_click_controller.connect("pressed", self.on_textview_click)
         text_view.add_controller(text_click_controller)
 
@@ -550,6 +662,7 @@ X-GNOME-UsesNotifications=true
         # Add a click controller to the main window to handle unfocus
         if window:
             window_click_controller = Gtk.GestureClick.new()
+            window_click_controller.set_propagation_phase(Gtk.PropagationPhase.BUBBLE)
             window_click_controller.connect("pressed", self.on_window_click)
             window.add_controller(window_click_controller)
 
@@ -641,7 +754,10 @@ X-GNOME-UsesNotifications=true
 
         # Create a picture widget with keep-aspect-ratio enabled
         picture = Gtk.Picture()
-        picture.set_keep_aspect_ratio(True)  # This is crucial for proper scaling
+        # Replace the deprecated set_keep_aspect_ratio with modern alternative
+        picture.set_content_fit(
+            Gtk.ContentFit.CONTAIN
+        )  # CONTAIN preserves aspect ratio
         picture.set_can_shrink(True)  # Allow image to shrink when window resizes
 
         # Load the image
@@ -756,7 +872,7 @@ X-GNOME-UsesNotifications=true
         self.description_label.set_selectable(True)
         self.description_label.set_wrap(True)
         self.description_label.set_text("Run detection to see Gemini's description")
-        self.description_label.get_style_context().add_class("description-text")
+        self.description_label.add_css_class("description-text")  # Modern GTK4 method
         description_scroll.set_child(self.description_label)
         description_frame.set_child(description_scroll)
         controls_box.append(description_frame)
@@ -914,31 +1030,6 @@ X-GNOME-UsesNotifications=true
 
         # Add the controls box to the main horizontal layout
         hbox.append(controls_box)
-
-        # Add CSS styling
-        css_provider = Gtk.CssProvider()
-        css_provider.load_from_data(
-            b"""
-            .heading {
-                font-size: 20px;
-                font-weight: bold;
-            }
-            .description-text {
-                font-size: 16px;
-                line-height: 1.5;
-            }
-            .prompt-text {
-                font-size: 18px;
-                line-height: 1.5;
-            }
-            """
-        )
-
-        # Apply the CSS provider
-        display = Gdk.Display.get_default()
-        Gtk.StyleContext.add_provider_for_display(
-            display, css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
-        )
 
         manual_window.set_child(hbox)
 
@@ -2261,50 +2352,156 @@ X-GNOME-UsesNotifications=true
         Gtk.Application.do_shutdown(self)
 
     def on_prompt_focus_in(self, controller):
-        """Handle focus-in for prompt textview."""
+        """Handle focus-in for prompt textview.
+
+        Args:
+            controller: The focus controller that triggered the event
+        """
+        # Get the text view that triggered the event
+        text_view = controller.get_widget()
+        if not text_view:
+            return
+
+        # Get the view ID if set
+        view_id = text_view.get_data("view_id")
+
+        # Get the appropriate placeholder state based on view ID
+        if view_id:
+            is_placeholder_visible = getattr(
+                self, f"is_placeholder_visible_{view_id}", False
+            )
+        else:
+            is_placeholder_visible = getattr(self, "is_placeholder_visible", False)
+
         # When focused, clear the placeholder text
-        if self.is_placeholder_visible:
-            self.prompt_buffer.set_text("")
-            self.prompt_entry_view.remove_css_class("placeholder")
-            self.is_placeholder_visible = False
+        if is_placeholder_visible:
+            buffer = text_view.get_buffer()
+            buffer.set_text("")
+            text_view.remove_css_class("placeholder")
+
+            # Update the placeholder state
+            if view_id:
+                setattr(self, f"is_placeholder_visible_{view_id}", False)
+            else:
+                self.is_placeholder_visible = False
 
         # Make sure the text view has focus
-        self.prompt_entry_view.grab_focus()
+        text_view.grab_focus()
 
     def on_prompt_focus_out(self, controller):
-        """Handle focus-out for prompt textview."""
-        # When unfocused and empty, restore the placeholder text
-        buffer = self.prompt_entry_view.get_buffer()
+        """Handle focus-out for prompt textview.
+
+        Args:
+            controller: The focus controller that triggered the event
+        """
+        # Get the text view that triggered the event
+        text_view = controller.get_widget()
+        if not text_view:
+            return
+
+        # Get the view ID if set
+        view_id = text_view.get_data("view_id")
+
+        # Get the buffer text
+        buffer = text_view.get_buffer()
         start = buffer.get_start_iter()
         end = buffer.get_end_iter()
         text = buffer.get_text(start, end, True)
+
+        # When unfocused and empty, restore the placeholder text
         if not text.strip():
-            self.is_placeholder_visible = True
-            buffer.set_text(self.placeholder_text)
-            self.prompt_entry_view.add_css_class("placeholder")
+            # Get the appropriate placeholder text based on view ID
+            if view_id:
+                placeholder_text = getattr(
+                    self, f"placeholder_text_{view_id}", "[Standard]"
+                )
+                setattr(self, f"is_placeholder_visible_{view_id}", True)
+            else:
+                placeholder_text = getattr(self, "placeholder_text", "[Standard]")
+                self.is_placeholder_visible = True
+
+            buffer.set_text(placeholder_text)
+            text_view.add_css_class("placeholder")
 
     def on_textview_click(self, gesture, n_press, x, y):
-        """Handle click directly on the text view."""
-        # Ensure the text view gets focus when clicked
-        self.prompt_entry_view.grab_focus()
+        """Handle click directly on the text view.
+
+        Args:
+            gesture: The gesture controller that triggered the event
+            n_press: Number of presses (clicks)
+            x: X coordinate of the click
+            y: Y coordinate of the click
+
+        Returns:
+            False to allow event propagation
+        """
+        # Get the text view that was clicked
+        text_view = gesture.get_widget()
+        if not text_view:
+            return False
+
+        # Get the view ID if set
+        view_id = text_view.get_data("view_id")
+
+        # Ensure the text view gets focus
+        text_view.grab_focus()
 
         # If placeholder is visible, clear it on first click
-        if self.is_placeholder_visible:
-            self.prompt_buffer.set_text("")
-            self.prompt_entry_view.remove_css_class("placeholder")
-            self.is_placeholder_visible = False
+        if view_id:
+            is_placeholder_visible = getattr(
+                self, f"is_placeholder_visible_{view_id}", False
+            )
+        else:
+            is_placeholder_visible = getattr(self, "is_placeholder_visible", False)
+
+        if is_placeholder_visible:
+            buffer = text_view.get_buffer()
+            buffer.set_text("")
+            text_view.remove_css_class("placeholder")
+
+            # Update the placeholder state
+            if view_id:
+                setattr(self, f"is_placeholder_visible_{view_id}", False)
+            else:
+                self.is_placeholder_visible = False
 
         # Allow event propagation
         return False
 
     def on_window_click(self, gesture, n_press, x, y):
-        """Handle click on the window to unfocus text view if needed."""
-        # Get the widget that was clicked
-        widget = gesture.get_widget().pick(x, y, Gtk.PickFlags.DEFAULT)
+        """Handle click on the window to unfocus text view if needed.
 
-        # If the clicked widget is not the prompt_entry_view and prompt_entry_view has focus,
-        # unfocus it by setting focus back to the window
-        if widget is not self.prompt_entry_view and self.prompt_entry_view.has_focus():
+        Args:
+            gesture: The gesture controller that triggered the event
+            n_press: Number of presses (clicks)
+            x: X coordinate of the click
+            y: Y coordinate of the click
+        """
+        # Get the widget that was clicked - use proper PickFlags in GTK4
+        # The PickFlags.DEFAULT constant is not available in GTK4, use 0 instead
+        widget = gesture.get_widget().pick(x, y, 0)
+
+        # Check if we have any prompt_entry_view with focus
+        prompt_view = None
+
+        # First check the default prompt_entry_view
+        if hasattr(self, "prompt_entry_view") and self.prompt_entry_view:
+            if self.prompt_entry_view.has_focus():
+                prompt_view = self.prompt_entry_view
+
+        # If we didn't find a focused view, check for any with the specified ID pattern
+        if not prompt_view:
+            for attr in dir(self):
+                if attr.startswith("prompt_entry_view_") and isinstance(
+                    getattr(self, attr), Gtk.TextView
+                ):
+                    view = getattr(self, attr)
+                    if view.has_focus():
+                        prompt_view = view
+                        break
+
+        # If we found a focused prompt view and it's not the clicked widget, unfocus it
+        if prompt_view and widget is not prompt_view:
             # Use the gesture's widget's root window to grab focus
             window = gesture.get_widget().get_root()
             if window:
