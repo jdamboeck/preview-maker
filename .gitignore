@@ -196,7 +196,7 @@ sample_kimono.jpg
 !prompts/user_prompt.md
 !prompts/technical_prompt.md
 
-# IDE specific files
+# IDE files
 .idea/
 .vscode/
 *.swp
