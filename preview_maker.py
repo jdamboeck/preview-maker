@@ -459,24 +459,104 @@ X-GNOME-UsesNotifications=true
         return False
 
     def _clear_status_bar(self):
-        """Clear the status bar."""
+        """Clear the status bar message."""
         if hasattr(self, "status_bar") and self.status_bar:
             self.status_bar.set_text("")
-        return False
 
     def _withdraw_notification(self, notification_id):
-        """No longer needed with libnotify approach."""
-        return False
+        """Withdraw a notification by id if it exists."""
+        Notify.Notification.close(notification_id)
 
     def _hide_notification(self):
-        """Hide notification - kept for compatibility."""
-        if self.notification is not None:
-            try:
-                self.notification.close()
-                self.notification = None
-            except Exception as e:
-                print(f"Error hiding notification: {e}")
-        return False  # Don't repeat
+        """Hide the current notification if it exists."""
+        if self.notification:
+            self.notification.close()
+
+    def _setup_prompt_text_view_css(self):
+        """Create and return a CSS provider for the placeholder styling."""
+        css_provider = Gtk.CssProvider()
+        css_provider.load_from_data(
+            b"""
+            textview.placeholder {
+                color: alpha(#666666, 0.7);
+                font-style: italic;
+                font-size: 95%;
+            }
+            """
+        )
+        return css_provider
+
+    def _setup_prompt_text_view(self, prompt_scroll, window):
+        """Setup a text view for prompt editing with placeholder functionality.
+
+        Args:
+            prompt_scroll: The ScrolledWindow that will contain the text view
+            window: The parent window for adding the click controller
+
+        Returns:
+            The configured TextView widget
+        """
+        # Create a text view for the prompt with placeholder functionality
+        text_view = Gtk.TextView()
+        text_view.set_wrap_mode(Gtk.WrapMode.WORD)
+        text_view.set_top_margin(8)
+        text_view.set_bottom_margin(8)
+        text_view.set_left_margin(8)
+        text_view.set_right_margin(8)
+
+        # Set appropriate dimensions
+        text_view.set_size_request(500, 100)
+
+        # Apply the CSS provider to the text view
+        css_provider = self._setup_prompt_text_view_css()
+        context = text_view.get_style_context()
+        context.add_provider(css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+
+        # Get the default user prompt
+        try:
+            with open(DEFAULT_PROMPT_FILE, "r", encoding="utf-8") as f:
+                self.default_user_prompt = f.read()
+        except FileNotFoundError:
+            self.default_user_prompt = config.DEFAULT_USER_PROMPT
+
+        # Set up placeholder text and handling
+        buffer = text_view.get_buffer()
+        self.prompt_buffer = buffer
+        self.prompt_entry_view = text_view
+        self.is_placeholder_visible = True
+
+        # Use the same shortened placeholder format for consistency
+        first_sentence = self.default_user_prompt.split(".")[0]
+        if len(first_sentence) > 50:
+            short_placeholder = first_sentence[:50] + "..."
+        else:
+            short_placeholder = first_sentence
+        self.placeholder_text = f"[Standard] {short_placeholder}"
+
+        buffer.set_text(self.placeholder_text)
+        text_view.add_css_class("placeholder")
+
+        # Add a direct click controller to the text view itself
+        text_click_controller = Gtk.GestureClick.new()
+        text_click_controller.connect("pressed", self.on_textview_click)
+        text_view.add_controller(text_click_controller)
+
+        # Handle focus events with a focus controller
+        focus_controller = Gtk.EventControllerFocus.new()
+        focus_controller.connect("enter", self.on_prompt_focus_in)
+        focus_controller.connect("leave", self.on_prompt_focus_out)
+        text_view.add_controller(focus_controller)
+
+        # Add a click controller to the main window to handle unfocus
+        if window:
+            window_click_controller = Gtk.GestureClick.new()
+            window_click_controller.connect("pressed", self.on_window_click)
+            window.add_controller(window_click_controller)
+
+        # Set the text view as the child of the scroll window
+        prompt_scroll.set_child(text_view)
+
+        return text_view
 
     def on_auto_drop(self, drop_target, value, x, y):
         """Handle automatic mode drop."""
@@ -710,78 +790,15 @@ X-GNOME-UsesNotifications=true
         prompt_scroll.set_hexpand(True)
         prompt_scroll.set_min_content_height(100)  # Increased for better usability
 
-        # Create a text view for the prompt with placeholder functionality
-        self.prompt_entry_view = Gtk.TextView()
-        self.prompt_entry_view.set_wrap_mode(Gtk.WrapMode.WORD)
-        self.prompt_entry_view.set_top_margin(8)
-        self.prompt_entry_view.set_bottom_margin(8)
-        self.prompt_entry_view.set_left_margin(8)
-        self.prompt_entry_view.set_right_margin(8)
-
-        # Set appropriate dimensions
-        self.prompt_entry_view.set_size_request(500, 100)
-
         # Add simple margins to the scroll window
         prompt_scroll.set_margin_top(8)
         prompt_scroll.set_margin_bottom(8)
         prompt_scroll.set_margin_start(8)
         prompt_scroll.set_margin_end(8)
 
-        # Create a CSS provider ONLY for the placeholder text
-        css_provider = Gtk.CssProvider()
-        css_provider.load_from_data(
-            b"""
-            textview.placeholder {
-                color: alpha(#666666, 0.7);
-                font-style: italic;
-                font-size: 95%;
-            }
-            """
-        )
+        # Use the helper method to setup the prompt text view
+        self._setup_prompt_text_view(prompt_scroll, manual_window)
 
-        # Apply the CSS provider to the text view
-        context = self.prompt_entry_view.get_style_context()
-        context.add_provider(css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
-
-        # Get the default user prompt
-        try:
-            with open(DEFAULT_PROMPT_FILE, "r", encoding="utf-8") as f:
-                self.default_user_prompt = f.read()
-        except FileNotFoundError:
-            self.default_user_prompt = config.DEFAULT_USER_PROMPT
-
-        # Set up placeholder text and handling
-        self.prompt_buffer = self.prompt_entry_view.get_buffer()
-        self.is_placeholder_visible = True
-
-        # Use the same shortened placeholder format for consistency
-        first_sentence = self.default_user_prompt.split(".")[0]
-        if len(first_sentence) > 50:
-            short_placeholder = first_sentence[:50] + "..."
-        else:
-            short_placeholder = first_sentence
-        self.placeholder_text = f"[Standard] {short_placeholder}"
-
-        self.prompt_buffer.set_text(self.placeholder_text)
-        self.prompt_entry_view.add_css_class("placeholder")
-
-        # Add a direct click controller to the text view itself
-        text_click_controller = Gtk.GestureClick.new()
-        text_click_controller.connect("pressed", self.on_textview_click)
-        self.prompt_entry_view.add_controller(text_click_controller)
-
-        # Handle focus events with a focus controller
-        focus_controller = Gtk.EventControllerFocus.new()
-        focus_controller.connect("enter", self.on_prompt_focus_in)
-        focus_controller.connect("leave", self.on_prompt_focus_out)
-        self.prompt_entry_view.add_controller(focus_controller)
-
-        # Add a click controller to the main window to handle unfocus
-        window_click_controller = Gtk.GestureClick.new()
-        window_click_controller.connect("pressed", self.on_window_click)
-        manual_window.add_controller(window_click_controller)
-
-        prompt_scroll.set_child(self.prompt_entry_view)
         target_section.append(prompt_scroll)
 
         # Add the Rerun Detection button next to target type
@@ -1681,16 +1698,16 @@ X-GNOME-UsesNotifications=true
             with open(DEFAULT_PROMPT_FILE, "w", encoding="utf-8") as f:
                 f.write(config.DEFAULT_USER_PROMPT)
 
-            if self.prompt_text_view:
-                self.prompt_text_view.get_buffer().set_text(config.DEFAULT_USER_PROMPT)
+            if hasattr(self, "prompt_entry_view") and self.prompt_entry_view:
+                self.prompt_entry_view.get_buffer().set_text(config.DEFAULT_USER_PROMPT)
             self.show_notification("Benutzeraufforderung auf Standard zurückgesetzt")
         except Exception as e:
             self.show_notification(f"Fehler beim Zurücksetzen der Aufforderung: {e}")
 
     def save_prompt_as_default(self, button):
         """Save the current prompt as the default one."""
-        if hasattr(self, "prompt_text_view") and self.prompt_text_view:
-            buffer = self.prompt_text_view.get_buffer()
+        if hasattr(self, "prompt_entry_view") and self.prompt_entry_view:
+            buffer = self.prompt_entry_view.get_buffer()
             start_iter = buffer.get_start_iter()
             end_iter = buffer.get_end_iter()
             prompt_text = buffer.get_text(start_iter, end_iter, True)
@@ -1802,227 +1819,43 @@ X-GNOME-UsesNotifications=true
         prompt_scroll.set_hexpand(True)
         prompt_scroll.set_min_content_height(100)  # Increased for better usability
 
-        # Create a text view for the prompt with placeholder functionality
-        self.prompt_entry_view = Gtk.TextView()
-        self.prompt_entry_view.set_wrap_mode(Gtk.WrapMode.WORD)
-        self.prompt_entry_view.set_top_margin(8)
-        self.prompt_entry_view.set_bottom_margin(8)
-        self.prompt_entry_view.set_left_margin(8)
-        self.prompt_entry_view.set_right_margin(8)
-
-        # Set appropriate dimensions
-        self.prompt_entry_view.set_size_request(500, 100)
-
         # Add simple margins to the scroll window
         prompt_scroll.set_margin_top(8)
         prompt_scroll.set_margin_bottom(8)
         prompt_scroll.set_margin_start(8)
         prompt_scroll.set_margin_end(8)
 
-        # Create a CSS provider ONLY for the placeholder text
-        css_provider = Gtk.CssProvider()
-        css_provider.load_from_data(
-            b"""
-            textview.placeholder {
-                color: alpha(#666666, 0.7);
-                font-style: italic;
-                font-size: 95%;
-            }
-            """
+        # Use the helper method to setup the prompt text view
+        self._setup_prompt_text_view(prompt_scroll, dialog)
+
+        # Add the scrolled window with the prompt text view to the main box
+        main_box.append(prompt_scroll)
+
+        # Add a box for prompt control buttons
+        prompt_buttons_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        prompt_buttons_box.set_margin_top(8)
+        prompt_buttons_box.set_halign(Gtk.Align.END)
+
+        # Add reset button
+        reset_button = Gtk.Button(label="Zurücksetzen")
+        reset_button.connect(
+            "clicked", lambda btn: self.reset_custom_prompt(btn, self.prompt_entry_view)
         )
+        reset_button.set_margin_end(8)
+        prompt_buttons_box.append(reset_button)
 
-        # Apply the CSS provider to the text view
-        context = self.prompt_entry_view.get_style_context()
-        context.add_provider(css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
-
-        # Get the default user prompt
-        try:
-            with open(DEFAULT_PROMPT_FILE, "r", encoding="utf-8") as f:
-                self.default_user_prompt = f.read()
-        except FileNotFoundError:
-            self.default_user_prompt = config.DEFAULT_USER_PROMPT
-
-        # Set up placeholder text and handling
-        self.prompt_buffer = self.prompt_entry_view.get_buffer()
-        self.is_placeholder_visible = True
-
-        # Use the same shortened placeholder format for consistency
-        first_sentence = self.default_user_prompt.split(".")[0]
-        if len(first_sentence) > 50:
-            short_placeholder = first_sentence[:50] + "..."
-        else:
-            short_placeholder = first_sentence
-        self.placeholder_text = f"[Standard] {short_placeholder}"
-
-        self.prompt_buffer.set_text(self.placeholder_text)
-        self.prompt_entry_view.add_css_class("placeholder")
-
-        # Add a direct click controller to the text view itself
-        text_click_controller = Gtk.GestureClick.new()
-        text_click_controller.connect("pressed", self.on_textview_click)
-        self.prompt_entry_view.add_controller(text_click_controller)
-
-        # Handle focus events with a focus controller
-        focus_controller = Gtk.EventControllerFocus.new()
-        focus_controller.connect("enter", self.on_prompt_focus_in)
-        focus_controller.connect("leave", self.on_prompt_focus_out)
-        self.prompt_entry_view.add_controller(focus_controller)
-
-        # Add a click controller to the main window to handle unfocus
-        window_click_controller = Gtk.GestureClick.new()
-        window_click_controller.connect("pressed", self.on_window_click)
-        manual_window.add_controller(window_click_controller)
-
-        prompt_scroll.set_child(self.prompt_entry_view)
-        target_section.append(prompt_scroll)
-
-        # Add the Rerun Detection button next to target type
-        rerun_button = Gtk.Button(label="Erkennung erneut ausführen")
-        rerun_button.connect("clicked", self.rerun_detection)
-        rerun_button.set_margin_start(8)
-        target_section.append(rerun_button)
-
-        prompt_box.append(target_section)
-
-        # Add an advanced settings button for API debug and custom prompt
-        advanced_button = Gtk.Button.new_with_label("Erweiterte Einstellungen")
-        advanced_button.set_halign(Gtk.Align.END)
-        advanced_button.connect("clicked", self.show_advanced_settings)
-        prompt_box.append(advanced_button)
-
-        # Add a note about targeting precision
-        targeting_note = Gtk.Label()
-        targeting_note.set_markup(
-            "<small><i>Für beste Ergebnisse, geben Sie ein einzelnes, eindeutiges Objekt im 'Zieltyp' an, "
-            "anstatt allgemeine Kategorien</i></small>"
+        # Add save button
+        save_button = Gtk.Button(label="Speichern")
+        save_button.connect(
+            "clicked", lambda btn: self.save_custom_prompt(btn, self.prompt_entry_view)
         )
-        targeting_note.set_halign(Gtk.Align.START)
-        targeting_note.set_margin_top(4)
-        prompt_box.append(targeting_note)
+        save_button.add_css_class("suggested-action")  # Highlight this button
+        prompt_buttons_box.append(save_button)
 
-        prompt_section.set_child(prompt_box)
-        controls_box.append(prompt_section)
+        main_box.append(prompt_buttons_box)
 
-        # Get the default prompt from file for use in detection
-        try:
-            with open(DEFAULT_PROMPT_FILE, "r", encoding="utf-8") as f:
-                self.default_prompt = f.read()
-        except FileNotFoundError:
-            # Fallback to a basic prompt if file doesn't exist
-            self.default_prompt = (
-                "Please analyze this image and identify the most interesting {target_type} area. "
-                "Return coordinates of a bounding box as normalized values between 0 and 1 "
-                "in the format: x1,y1,x2,y2 where x1,y1 is the top-left corner."
-            )
-
-        # Add debug options section
-        debug_section = Gtk.Box(
-            orientation=Gtk.Orientation.VERTICAL, spacing=12
-        )  # Increased spacing
-        debug_section.set_margin_bottom(16)  # Increased margin
-
-        # Add a horizontal box for size controls
-        size_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-
-        # Size label
-        size_label = Gtk.Label(label="Auswahlgröße:")
-        size_label.set_halign(Gtk.Align.START)
-        size_label.set_size_request(100, -1)  # Fixed width for label
-        size_box.append(size_label)
-
-        # Add a scale for adjusting the selection circle size
-        size_scale = Gtk.Scale.new_with_range(
-            Gtk.Orientation.HORIZONTAL, 0.05, 0.3, 0.01
-        )
-        size_scale.set_value(self.selection_ratio)
-        size_scale.set_hexpand(True)
-        size_scale.set_tooltip_text("Adjust the size of the selection circle")
-        size_scale.connect("value-changed", self.on_selection_size_changed)
-        size_box.append(size_scale)
-
-        debug_section.append(size_box)
-
-        # Add a horizontal box for zoom controls
-        zoom_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-
-        # Zoom label
-        zoom_label = Gtk.Label(label="Vergrößerung:")
-        zoom_label.set_halign(Gtk.Align.START)
-        zoom_label.set_size_request(100, -1)  # Fixed width for label
-        zoom_box.append(zoom_label)
-
-        # Add a scale for adjusting the zoom factor
-        zoom_scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 1.5, 5.0, 0.1)
-        zoom_scale.set_value(self.zoom_factor)
-        zoom_scale.set_hexpand(True)
-        zoom_scale.set_tooltip_text("Adjust the zoom factor")
-        zoom_scale.connect("value-changed", self.on_zoom_factor_changed)
-        zoom_box.append(zoom_scale)
-
-        debug_section.append(zoom_box)
-
-        controls_box.append(debug_section)
-
-        # Add buttons with improved styling
-        button_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=16)
-        button_box.set_halign(Gtk.Align.END)
-        button_box.set_margin_top(8)
-
-        # Add explanatory text on the left side of the button box
-        help_text = Gtk.Label()
-        help_text.set_markup(
-            "<small>Linksklick: Vorschaupunkt setzen (blauer Kreis)\n"
-            "Strg+Linksklick: Vergrößerungspunkt setzen (grüner Kreis)</small>"
-        )
-        help_text.set_halign(Gtk.Align.START)
-        help_text.set_hexpand(True)
-        button_box.append(help_text)
-
-        # Create styled buttons
-        apply_button = Gtk.Button(label="Änderungen anwenden")
-        apply_button.connect("clicked", self.apply_manual_changes)
-        apply_button.add_css_class("suggested-action")  # Highlight this button
-
-        button_box.append(apply_button)
-
-        controls_box.append(button_box)
-
-        # Add the controls box to the main horizontal layout
-        hbox.append(controls_box)
-
-        # Add CSS styling
-        css_provider = Gtk.CssProvider()
-        css_provider.load_from_data(
-            b"""
-            .heading {
-                font-size: 20px;
-                font-weight: bold;
-            }
-            .description-text {
-                font-size: 16px;
-                line-height: 1.5;
-            }
-            .prompt-text {
-                font-size: 18px;
-                line-height: 1.5;
-            }
-            """
-        )
-
-        # Apply the CSS provider
-        display = Gdk.Display.get_default()
-        Gtk.StyleContext.add_provider_for_display(
-            display, css_provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
-        )
-
-        manual_window.set_child(hbox)
-
-        # Show the window
-        manual_window.present()
-
-        # Automatically run detection when the window is shown
-        # Use a short delay to ensure the window is fully rendered
-        GLib.timeout_add(500, lambda: self.rerun_detection(rerun_button))
+        # Present the dialog
+        dialog.present()
 
     def reset_custom_prompt(self, button, text_view):
         """Reset the prompt to the default template."""

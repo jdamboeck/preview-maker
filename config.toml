@@ -6,7 +6,7 @@ default_prompt_file = "prompts/user_prompt.md"
 technical_prompt_file = "prompts/technical_prompt.md"
 
 [image_processing]
-selection_ratio = 0.1
+selection_ratio = 0.12264957264957266
 zoom_factor = 3.0
 png_compression = 4
 high_resampling = 1
