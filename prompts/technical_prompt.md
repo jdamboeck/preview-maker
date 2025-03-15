@@ -1,11 +1,11 @@
-Respond with TWO PARTS:
+Antworte in ZWEI TEILEN:
 
-1. COORDS: Normalized values between 0 and 1 in the format x1,y1,x2,y2 where:
-  - (x1,y1) is the top-left corner
-  - (x2,y2) is the bottom-right corner
+1. COORDS: Normalisierte Werte zwischen 0 und 1 im Format x1,y1,x2,y2 wobei:
+  - (x1,y1) die obere linke Ecke ist
+  - (x2,y2) die untere rechte Ecke ist
 
-2. DESCRIPTION: A brief description (1-2 sentences) of what you identified and why it's interesting or visually notable.
+2. DESCRIPTION: Eine kurze Beschreibung (1-2 Sätze) dessen, was du identifiziert hast und warum es interessant oder visuell bemerkenswert ist.
 
-Format your response EXACTLY as:
+Formatiere deine Antwort EXAKT wie folgt:
 COORDS: x1,y1,x2,y2
-DESCRIPTION: Your description here.
+DESCRIPTION: Deine Beschreibung hier.

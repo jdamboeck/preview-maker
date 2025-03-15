@@ -22,7 +22,7 @@ top_k = 0
 image_extensions = [ ".jpg", ".jpeg", ".png", ".bmp", ".gif",]
 
 [detection]
-default_target_type = "interesting detail"
+default_target_type = "Produkt-Highlight"
 
 [ui]
 debug_mode = true

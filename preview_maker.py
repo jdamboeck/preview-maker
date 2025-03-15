@@ -697,7 +697,7 @@ X-GNOME-UsesNotifications=true
         target_section = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         target_section.set_margin_bottom(12)
 
-        target_label = Gtk.Label(label="Target Type:")
+        target_label = Gtk.Label(label="Zielobjekt:")
         target_label.set_halign(Gtk.Align.START)
         target_label.set_margin_end(10)
         target_section.append(target_label)

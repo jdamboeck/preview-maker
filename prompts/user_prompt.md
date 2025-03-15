@@ -1,14 +1,15 @@
-Please analyze this image and identify ONE SPECIFIC {target_type} that stands out.
+Bitte analysiere dieses Bild und identifiziere EIN SPEZIFISCHES {target_type}, das hervorsticht.
 
-I need you to find a SINGLE, DISTINCT object or feature in this image - not a general area.
+Ich benötige, dass du EINEN EINZELNEN, DEUTLICHEN Gegenstand oder ein Merkmal in diesem Produktbild findest - keine allgemeine Fläche.
 
-Analysis Process:
-1. Scan the entire image for distinct {target_type} elements
-2. Identify ONE specific element that is:
-   - Clearly defined with distinct boundaries
-   - Visually separate from its surroundings
-   - Small enough to be a precise target (5-15% of the image area)
-   - Detailed enough to benefit from magnification
+Analyseprozess:
+1. Scanne das gesamte Bild nach dem Hauptprodukt
+2. Identifiziere das wichtigste Highlight oder Merkmal dieses Produkts, das:
+   - Klar definierte Grenzen hat
+   - Sich visuell von seiner Umgebung abhebt
+   - Klein genug ist, um ein präzises Ziel zu sein (5-15% der Bildfläche)
+   - Detailliert genug ist, um von einer Vergrößerung zu profitieren
+   - Ein wichtiges Verkaufsargument oder eine Besonderheit des Produkts darstellt
 
-3. Find the exact center point of this specific element
-4. Create a tight bounding box directly around ONLY this single element
+3. Finde den exakten Mittelpunkt dieses spezifischen Elements
+4. Erstelle einen engen Begrenzungsrahmen direkt um NUR dieses einzelne Element

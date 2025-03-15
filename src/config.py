@@ -314,31 +314,36 @@ def update_config(section, key, value):
 
 # Default prompts as fallbacks
 DEFAULT_TECHNICAL_PROMPT = """
-Respond with TWO PARTS:
+Antworte mit ZWEI TEILEN:
 
-1. COORDS: Normalized values between 0 and 1 in the format x1,y1,x2,y2 where (x1,y1) is the top-left corner and (x2,y2) is the bottom-right corner.
+1. COORDS: Normalisierte Werte zwischen 0 und 1 im Format x1,y1,x2,y2 wobei:
+  - (x1,y1) die obere linke Ecke ist
+  - (x2,y2) die untere rechte Ecke ist
 
-2. DESCRIPTION: A brief description (1-2 sentences) of what you identified and why it's interesting or visually notable.
+2. DESCRIPTION: Eine kurze Beschreibung (1-2 Sätze) dessen, was du identifiziert hast und
+   warum es interessant oder visuell bemerkenswert ist.
 
-Format your response EXACTLY as:
+Formatiere deine Antwort EXAKT wie folgt:
 COORDS: x1,y1,x2,y2
-DESCRIPTION: Your description here.
+DESCRIPTION: Deine Beschreibung hier.
 """.strip()
 
-DEFAULT_USER_PROMPT = """Please analyze this image and identify ONE SPECIFIC {target_type} that stands out.
+DEFAULT_USER_PROMPT = """Bitte analysiere dieses Bild und identifiziere EIN SPEZIFISCHES {target_type}, das hervorsticht.
 
-I need you to find a SINGLE, DISTINCT object or feature in this image - not a general area.
+Ich benötige, dass du EINEN EINZELNEN, DEUTLICHEN Gegenstand oder ein Merkmal in diesem
+Produktbild findest - keine allgemeine Fläche.
 
-Step by step:
-1. Scan the entire image for distinct {target_type} elements
-2. Identify ONE specific element that is:
-   - Clearly defined with distinct boundaries
-   - Visually separate from its surroundings
-   - Small enough to be a precise target (5-15% of the image area)
-   - Detailed enough to benefit from magnification
+Analyseprozess:
+1. Scanne das gesamte Bild nach dem Hauptprodukt
+2. Identifiziere das wichtigste Highlight oder Merkmal dieses Produkts, das:
+   - Klar definierte Grenzen hat
+   - Sich visuell von seiner Umgebung abhebt
+   - Klein genug ist, um ein präzises Ziel zu sein (5-15% der Bildfläche)
+   - Detailliert genug ist, um von einer Vergrößerung zu profitieren
+   - Ein wichtiges Verkaufsargument oder eine Besonderheit des Produkts darstellt
 
-3. Find the exact center point of this specific element
-4. Create a tight bounding box directly around ONLY this single element
+3. Finde den exakten Mittelpunkt dieses spezifischen Elements
+4. Erstelle einen engen Begrenzungsrahmen direkt um NUR dieses einzelne Element
 """.strip()
 
 # Ensure the prompt files exist
