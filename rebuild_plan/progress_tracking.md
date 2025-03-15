@@ -34,7 +34,7 @@ This document tracks the progress of the Preview Maker rebuild implementation. U
 | Response Parsing | Completed | - | ResponseParser fully implemented with all tests passing |
 | Fallback Detection Mechanisms | Completed | - | Added error handling and graceful degradation |
 | Prompt Management | Completed | - | Method build_prompt implemented and aligned with tests |
-| AI Preview Generator | In Progress | - | 7/10 tests passing, 3 tests still failing due to mock issues |
+| AI Preview Generator | Completed | - | All tests now passing, fixed mock handling in tests |
 
 ### UI Components
 | Component | Status | Pull Request | Notes |
