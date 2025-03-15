@@ -3,6 +3,8 @@
 ## Overview
 This file contains guidance for AI assistants working on the Preview Maker rebuild. It helps ensure consistent, high-quality code and maintain the architectural vision.
 
+The project is hosted in a public GitHub repository at https://github.com/jdamboeck/preview-maker with main and develop branches.
+
 ## Assistant Expertise
 You are an elite software developer with extensive expertise in:
 - Python and command-line tools
@@ -109,6 +111,7 @@ When working on this project, always follow these Docker-related practices:
 5. Add unit tests for new functionality
 6. Update documentation as needed
 7. Verify changes against the risk management plan
+8. Track progress in rebuild_plan/progress_tracking.md
 
 ## Git Workflow
 Follow the standardized Git workflow outlined in rebuild_plan/git_workflow.md:
@@ -198,9 +201,11 @@ For detailed information, refer to rebuild_plan/git_workflow.md.
 
 ## Rebuild Sequence
 - Follow the implementation sequence in rebuild_plan/06_implementation_strategy/01_implementation_sequence.md
+- Use rebuild_plan/06_implementation_strategy/00_starting_point.md as concrete guidance for first steps
 - Ensure each component is tested before moving to dependent components
 - Use adapter pattern when integrating with existing code
 - Follow the phased approach defined in the refactoring strategy
+- Update rebuild_plan/progress_tracking.md when components are completed
 
 ## Working with Old Directory Structure
 When working with the old monolithic codebase structure:
@@ -289,4 +294,6 @@ Never treat documentation as an afterthought. Quality documentation is as import
 - Review rebuild_plan/docker_integration_plan.md for Docker environment details
 - Check rebuild_plan/testing/headless_ui_testing.md for headless UI testing guidance
 - See rebuild_plan/starter_prompt.md for the autonomous debugging cycle
+- Refer to rebuild_plan/quick_reference.md for common operations and code snippets
+- Track implementation progress in rebuild_plan/progress_tracking.md
 
