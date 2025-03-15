@@ -17,7 +17,7 @@ This document tracks the progress of the Preview Maker rebuild implementation. U
 | Configuration Management | Completed | - | Implemented with singleton pattern, TOML file loading, environment variables, and _reset_for_testing method |
 | Logging System | In Progress | - | Basic logging setup with file and console handlers, tests failing |
 | Error Handling Framework | Completed | - | Error handling in all components |
-| Event Communication System | Not Started | - | - |
+| Event Communication System | Completed | - | Implemented with singleton pattern, event subscription, publication, thread safety, and async operations |
 
 ### Image Processing
 | Component | Status | Pull Request | Notes |
@@ -70,7 +70,7 @@ This document tracks the progress of the Preview Maker rebuild implementation. U
 | Image Processing | ~100% | Completed | All tests now passing |
 | AI Integration | ~85% | In Progress | ResponseParser and ImageAnalyzer tests passing, integration tests partially passing |
 | UI Components | ~70% | In Progress | Mock-based testing not working with GTK component initialization |
-| Event System | ~60% | Completed | Testing of event handlers |
+| Event System | ~100% | Completed | All tests passing, including thread safety and async operation tests |
 
 ### Integration Tests
 | Test Area | Status | Notes |
@@ -171,6 +171,12 @@ Use this section to document important decisions, design changes, or other notab
   - Implemented proper type validation and directory creation
   - Added _reset_for_testing method for test isolation
   - All configuration tests now passing
+- 2024-05-23: Event Communication System implemented
+  - Created EventManager with singleton pattern and thread safety
+  - Implemented event subscription and publication mechanisms
+  - Added support for async event publication
+  - Implemented typed events for better type safety
+  - All event system tests now passing, including thread safety tests
 
 ## Next Steps
 
@@ -188,9 +194,9 @@ Based on our current progress, the following tasks should be prioritized:
    - Update mock implementation for GTK Application tests
    - Ensure UI tests can run in headless mode
 
-4. **Implement Event Communication System**
-   - Create EventManager class for handling application-wide events
-   - Add event subscription and publication mechanisms
+4. **Fix Image Cache Tests**
+   - Update ImageCache to work with new configuration structure
+   - Add cache_dir to PreviewMakerConfig or adapt tests to use existing paths
 
 5. **Address Linter Errors**
    - Add type hints for GTK and Cairo
