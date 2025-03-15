@@ -31,7 +31,27 @@ A GTK-based application for analyzing images using Google's Gemini AI API. The t
    ```
    export GEMINI_API_KEY=your_api_key_here
    ```
-   Or save it in a `.env` file in the project root directory
+   Or save it in a `.env` file in the project root directory (this file is gitignored)
+
+### API Key Security
+
+To ensure your API keys remain secure:
+
+1. **Never commit API keys to the repository**
+   - The `.env` file is included in `.gitignore` to prevent accidental commits
+   - Use the provided `.env.example` as a template
+
+2. **Rotate API keys regularly**
+   - Periodically generate new API keys from the Google AI Studio
+   - Update your local `.env` file with the new key
+
+3. **Restrict API key usage**
+   - Set appropriate usage limits in the Google Cloud Console
+   - Consider adding API key restrictions based on IP or referrer
+
+4. **For production deployments**
+   - Use environment variables or a secrets management service
+   - Never hardcode API keys in application code
 
 ## Configuration
 
