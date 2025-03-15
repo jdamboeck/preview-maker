@@ -929,6 +929,19 @@ X-GNOME-UsesNotifications=true
             # Convert normalized coordinates to viewport coordinates
             norm_x, norm_y = self.selected_magnification_point_norm
 
+            # Additional debug info to troubleshoot coordinate issues
+            if hasattr(self, "original_mag_x") and hasattr(self, "original_width"):
+                print(
+                    f"DEBUG COORDS: Original mag point: ({self.original_mag_x}, {self.original_mag_y})"
+                )
+                print(
+                    f"DEBUG COORDS: Original image dimensions: {self.original_width}x{self.original_height}"
+                )
+                print(
+                    f"DEBUG COORDS: Display image dimensions: {img_width}x{img_height}"
+                )
+                print(f"DEBUG COORDS: Drawing at normalized: ({norm_x}, {norm_y})")
+
             # Map from normalized coordinates to pixel positions on displayed image
             draw_x = x_offset + (norm_x * image_display_width)
             draw_y = y_offset + (norm_y * image_display_height)
@@ -1006,17 +1019,43 @@ X-GNOME-UsesNotifications=true
             # Get the original bounding box coordinates from Gemini API
             ox1, oy1, ox2, oy2 = self.gemini_box
 
+            # Print debug info to help diagnose coordinate issues
+            print(f"DEBUG: Drawing gemini_box: ({ox1}, {oy1}, {ox2}, {oy2})")
+            print(f"DEBUG: Current image dimensions: {img_width}x{img_height}")
+
+            # Check if we need to adjust coordinates for image resizing
+            if hasattr(self, "original_width") and img_width != self.original_width:
+                # The image might have been resized, adjust coordinates proportionally
+                width_ratio = img_width / self.original_width
+                height_ratio = img_height / self.original_height
+                print(
+                    f"DEBUG: Adjusting coordinates with ratios: {width_ratio}, {height_ratio}"
+                )
+
+                # Use ratios to adjust the box coordinates to the current image size
+                ox1 = int(ox1 * width_ratio)
+                oy1 = int(oy1 * height_ratio)
+                ox2 = int(ox2 * width_ratio)
+                oy2 = int(oy2 * height_ratio)
+                print(f"DEBUG: Adjusted gemini_box: ({ox1}, {oy1}, {ox2}, {oy2})")
+
             # Convert to normalized coordinates
             norm_ox1 = ox1 / img_width
             norm_oy1 = oy1 / img_height
             norm_ox2 = ox2 / img_width
             norm_oy2 = oy2 / img_height
+            print(
+                f"DEBUG: Normalized gemini_box: ({norm_ox1}, {norm_oy1}, {norm_ox2}, {norm_oy2})"
+            )
 
             # Map to display coordinates
             box_x1 = x_offset + (norm_ox1 * image_display_width)
             box_y1 = y_offset + (norm_oy1 * image_display_height)
             box_x2 = x_offset + (norm_ox2 * image_display_width)
             box_y2 = y_offset + (norm_oy2 * image_display_height)
+            print(
+                f"DEBUG: Display gemini_box: ({box_x1}, {box_y1}, {box_x2}, {box_y2})"
+            )
 
             # Draw the boundary box
             cr.set_source_rgba(0, 0.5, 1, 0.6)  # Blue, semi-transparent
@@ -1247,7 +1286,12 @@ X-GNOME-UsesNotifications=true
             # Store the raw boundary from Gemini for debug overlay
             # Only store if we got a real response from the API (not a fallback)
             if raw_box:
+                # Store the original raw bounding box to debug inconsistencies
                 self.gemini_box = raw_box
+                # Print additional debug info to help identify coordinate issues
+                x1, y1, x2, y2 = raw_box
+                print(f"DEBUG: Raw gemini_box: ({x1}, {y1}, {x2}, {y2})")
+                print(f"DEBUG: Image dimensions: {image.size[0]}x{image.size[1]}")
                 print("Received valid boundary box from Gemini API")
                 # Clear any previous API failure notification state
                 self._notification_timestamps.pop(
@@ -1280,6 +1324,13 @@ X-GNOME-UsesNotifications=true
                 x1, y1, x2, y2 = interesting_area
                 width, height = image.size
 
+                # Validate the coordinates to ensure they're within image bounds
+                # and in the correct order (i.e., x1 < x2 and y1 < y2)
+                x1 = max(0, min(width - 1, x1))
+                y1 = max(0, min(height - 1, y1))
+                x2 = max(x1 + 1, min(width, x2))
+                y2 = max(y1 + 1, min(height, y2))
+
                 # Set the magnification point to the center of the interesting area
                 mag_x = (x1 + x2) / 2
                 mag_y = (y1 + y2) / 2
@@ -1291,9 +1342,17 @@ X-GNOME-UsesNotifications=true
                 # Set the normalized coordinates
                 norm_mag_x = mag_x / width
                 norm_mag_y = mag_y / height
+
+                # IMPORTANT: Store these for debugging
+                self.original_mag_x = mag_x
+                self.original_mag_y = mag_y
+                self.original_width = width
+                self.original_height = height
+
+                # Store the normalized coordinates for circle drawing
                 self.selected_magnification_point_norm = (norm_mag_x, norm_mag_y)
 
-                # Calculate the preview point
+                # Calculate the preview point - fixed point in top left quadrant
                 preview_x = int(width * 0.125)
                 preview_y = int(height * 0.125)
                 norm_preview_x = preview_x / width
