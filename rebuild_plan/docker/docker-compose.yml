@@ -1,0 +1,96 @@
+services:
+  preview-maker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: preview-maker:dev
+    container_name: preview-maker-dev
+    user: developer
+    volumes:
+      - ../..:/app
+      - /tmp/.X11-unix:/tmp/.X11-unix  # For X11 forwarding
+      - ~/.Xauthority:/home/developer/.Xauthority:ro  # X11 authorization
+      - preview-maker-venv:/home/developer/.venv  # Persistent Python virtual environment
+    environment:
+      - DISPLAY=${DISPLAY:-:0}  # X11 display
+      - PREVIEW_MAKER_ENV=development
+      - PYTHONPATH=/app
+      - PYTEST_ADDOPTS="--color=yes"
+    network_mode: host  # Simplifies X11 forwarding and network access
+    working_dir: /app
+    command: dev
+    # Uncomment to enable debugging with VS Code or PyCharm
+    # ports:
+    #  - "5678:5678"  # For debugpy
+
+  # Service for running tests in CI environment
+  test:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: preview-maker:test
+    container_name: preview-maker-test
+    user: developer
+    volumes:
+      - ../..:/app
+    environment:
+      - PREVIEW_MAKER_ENV=test
+      - PYTHONPATH=/app
+      - PYTEST_ADDOPTS="--color=yes"
+    working_dir: /app
+    command: test -v
+
+  # Service for running the GTK overlay test
+  gtk-test:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: preview-maker:dev
+    container_name: preview-maker-gtk-test
+    user: developer
+    volumes:
+      - ../..:/app
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - ~/.Xauthority:/home/developer/.Xauthority:ro
+    environment:
+      - DISPLAY=${DISPLAY:-:0}
+      - PREVIEW_MAKER_ENV=test
+      - PYTHONPATH=/app
+    network_mode: host
+    working_dir: /app
+    command: gtk-test
+
+  # Service for running diagnostics
+  diagnostics:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: preview-maker:dev
+    container_name: preview-maker-diag
+    user: developer
+    volumes:
+      - ../..:/app
+    environment:
+      - PREVIEW_MAKER_ENV=test
+      - PYTHONPATH=/app
+    working_dir: /app
+    command: diag
+
+  # Service for verifying the environment
+  verify:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: preview-maker:dev
+    container_name: preview-maker-verify
+    user: developer
+    volumes:
+      - ../..:/app
+    environment:
+      - PREVIEW_MAKER_ENV=test
+      - PYTHONPATH=/app
+    working_dir: /app
+    command: verify
+
+volumes:
+  preview-maker-venv:  # Persistent volume for Python packages
