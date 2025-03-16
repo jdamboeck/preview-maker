@@ -95,6 +95,33 @@ If you encounter issues with GTK tests, check the following:
 3. **GTK Version**: Make sure the GTK version in the container matches the version expected by the application.
 4. **Dependencies**: Make sure all required dependencies are installed in the container.
 
+## Known Issues
+
+### GTK 4 API Compatibility
+
+When migrating from GTK 3 to GTK 4, several API changes can cause compatibility issues:
+
+1. **ImageView Content Fit**: The `set_content_fit` method requires proper GTK 4 Picture widget implementation. If you see errors like:
+   ```
+   AttributeError: 'ImageView' object has no attribute 'set_content_fit'
+   ```
+   The solution is to update the ImageView class to use GTK 4's Picture widget or implement a custom solution using DrawingArea.
+
+2. **Event Processing**: As mentioned in the Key Findings section, GTK 4 no longer uses `events_pending` and `main_iteration_do`. Test code must be updated to use `GLib.MainLoop`.
+
+3. **Application Windows**: New windows in GTK 4 must be created after the application's startup signal is emitted, or you'll see warnings like:
+   ```
+   Gtk-CRITICAL: New application windows must be added after the GApplication::startup signal has been emitted.
+   ```
+
+### Mock Integration
+
+When using mocks with real components, ensure that:
+
+1. The mocks properly implement all methods used by the real components
+2. The test environment correctly detects whether to use real or mock components
+3. All GTK-specific functionality is properly abstracted to allow for easy mocking
+
 ## Conclusion
 
 Xwayland testing provides a robust approach to testing GTK applications in containerized environments. By following the recommendations in this document, you can ensure that your GTK applications are thoroughly tested and work correctly in various environments.

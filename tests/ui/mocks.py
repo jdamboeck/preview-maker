@@ -386,6 +386,14 @@ class MockGdk:
             """Mock for new method."""
             return mock.MagicMock()
 
+    class ContentFit:
+        """Mock for Gdk.ContentFit enumeration."""
+
+        FILL = 0
+        CONTAIN = 1
+        COVER = 2
+        SCALE_DOWN = 3
+
 
 class MockGLib:
     """Mock GLib namespace for testing."""
@@ -403,49 +411,50 @@ class MockGLib:
 
 
 # Mock image view class for testing
-class MockImageView:
-    """Mock implementation of ImageView class for testing."""
+class MockImageView(MockGtk.Box):
+    """Mock implementation of ImageView class."""
 
     def __init__(self):
-        """Initialize the mock ImageView."""
+        """Initialize a mock image view."""
+        super().__init__(orientation=MockGtk.Orientation.VERTICAL)
         self._image = None
         self._scale = 1.0
         self._original_size = None
-        self.overlays = []  # For tracking overlay IDs
-        self.picture = MockGtk.Picture()
+        self._content_fit = MockGtk.ContentFit.CONTAIN
 
-    def set_image(self, image: Image.Image) -> None:
+    def set_image(self, image):
         """Set the image to display."""
         self._image = image
-        self._original_size = image.size if image else None
+        if image:
+            self._original_size = image.size
 
-    def get_image(self) -> Optional[Image.Image]:
-        """Get the currently displayed image."""
+    def get_image(self):
+        """Get the current image."""
         return self._image
 
-    def save_image(self, path: str) -> bool:
-        """Save the current image to a file."""
-        if not self._image:
-            return False
-        try:
-            self._image.save(path)
-            return True
-        except Exception:
-            return False
+    def set_scale(self, scale):
+        """Set the zoom scale."""
+        self._scale = scale
 
-    def add_overlay(self, overlay_id: str) -> None:
-        """Add an overlay to the image view."""
-        if overlay_id not in self.overlays:
-            self.overlays.append(overlay_id)
+    def get_scale(self):
+        """Get the current zoom scale."""
+        return self._scale
 
-    def remove_overlay(self, overlay_id: str) -> None:
-        """Remove an overlay from the image view."""
-        if overlay_id in self.overlays:
-            self.overlays.remove(overlay_id)
+    def set_can_shrink(self, can_shrink):
+        """Set whether the widget can shrink."""
+        pass  # Mock implementation does nothing
 
-    def update_overlay(self, overlay_id: str) -> None:
-        """Update the display for an overlay."""
-        pass
+    def set_content_fit(self, content_fit):
+        """Set how content fits in the widget."""
+        self._content_fit = content_fit
+
+    def get_content_fit(self):
+        """Get the current content fit mode."""
+        return self._content_fit
+
+    def _setup_controllers(self):
+        """Set up gesture controllers."""
+        pass  # Mock implementation does nothing
 
 
 # Mock ManualOverlayManager for testing
