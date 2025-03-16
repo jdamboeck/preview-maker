@@ -99,6 +99,35 @@ def test_window():
     # ... test implementation ...
 ```
 
+### 4. Xwayland Approach
+
+For more robust GTK testing with a complete X11 environment, we've implemented an Xwayland-based approach:
+
+1. A dedicated Docker image with Xwayland, Weston, and GTK4 dependencies
+2. Runs a self-contained Wayland+Xwayland server inside the container
+3. Works in both interactive and headless modes
+4. Eliminates dependency on host X11 configuration
+
+#### Using the Xwayland Testing Environment
+
+Run tests with the Xwayland environment:
+
+```bash
+# Run UI tests with Xwayland
+./rebuild_plan/docker/run_xwayland_tests.sh --test tests/ui/test_overlay_controls.py
+
+# Run in headless mode
+./rebuild_plan/docker/run_xwayland_tests.sh --headless --test tests/ui/test_overlay_controls.py
+```
+
+#### Benefits of the Xwayland Approach
+
+- Consistent environment between development and CI/CD
+- Self-contained X11 server with proper authentication
+- Improved stability compared to X11 forwarding
+- Full support for GTK4 features and rendering
+- Works in environments without an X server
+
 ## Docker Configuration for UI Testing
 
 In Docker, there are two main approaches:
@@ -153,6 +182,8 @@ docker-compose -f rebuild_plan/docker/docker-compose.yml run --rm test python re
 3. **Event-Based Testing**: Test that UI events trigger the correct business logic
 4. **Defensive Coding**: Handle GTK initialization failures gracefully
 5. **CI/CD Integration**: Include headless UI tests in CI/CD pipelines
+6. **Xwayland Usage**: Use Xwayland for more robust testing in CI/CD environments
+7. **Document Display Requirements**: Clearly document the display requirements for each test case
 
 ## Tools and Libraries
 
@@ -163,4 +194,4 @@ docker-compose -f rebuild_plan/docker/docker-compose.yml run --rm test python re
 
 ## Conclusion
 
-Headless UI testing for GTK applications is challenging but achievable using the approaches outlined in this document. For most cases, the mock-based approach offers the best reliability and performance, especially in CI/CD environments.
+Headless UI testing for GTK applications is challenging but achievable using the approaches outlined in this document. For most cases, the mock-based approach offers the best reliability and performance, especially in CI/CD environments. The Xwayland approach provides a more robust testing environment in CI/CD environments.

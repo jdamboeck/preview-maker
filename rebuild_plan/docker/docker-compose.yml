@@ -60,6 +60,31 @@ services:
     working_dir: /app
     command: gtk-test
 
+  # Service for running Xwayland-based GTK tests
+  xwayland-test:
+    build:
+      context: .
+      dockerfile: Dockerfile.xwayland
+    image: preview-maker:xwayland
+    container_name: preview-maker-xwayland-test
+    user: developer
+    volumes:
+      - ../..:/app
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      # Optional X11 auth file - if running in X11 environment
+      - ${XAUTHORITY:-~/.Xauthority}:/home/developer/.Xauthority:ro
+    environment:
+      - DISPLAY=${DISPLAY:-:0}
+      - PREVIEW_MAKER_ENV=test
+      - PYTHONPATH=/app
+      - USE_XWAYLAND=1
+      - HEADLESS=${HEADLESS:-0}
+      - PATH=/opt/venv/bin:$PATH
+    # Using priviledged mode for Wayland/Xwayland access
+    privileged: true
+    working_dir: /app
+    command: gtk-test
+
   # Service for running diagnostics
   diagnostics:
     build:
@@ -91,6 +116,27 @@ services:
       - PYTHONPATH=/app
     working_dir: /app
     command: verify
+
+  # Service for verifying the Xwayland environment
+  xwayland-verify:
+    build:
+      context: .
+      dockerfile: Dockerfile.xwayland
+    image: preview-maker:xwayland
+    container_name: preview-maker-xwayland-verify
+    user: developer
+    volumes:
+      - ../..:/app
+    environment:
+      - PREVIEW_MAKER_ENV=test
+      - PYTHONPATH=/app
+      - USE_XWAYLAND=1
+      - RUN_DIAGNOSTIC=1
+      - PATH=/opt/venv/bin:$PATH
+    # Using priviledged mode for Wayland/Xwayland access
+    privileged: true
+    working_dir: /app
+    command: diagnostics
 
 volumes:
   preview-maker-venv:  # Persistent volume for Python packages
