@@ -1,0 +1,18 @@
+# Default owners for everything in the repo
+* @jdamboeck
+
+# Documentation owners
+docs/ @jdamboeck
+rebuild_plan/ @jdamboeck
+
+# Core code owners
+preview_maker/core/ @jdamboeck
+
+# UI code owners
+preview_maker/ui/ @jdamboeck
+
+# AI integration code owners
+preview_maker/ai/ @jdamboeck
+
+# Testing code owners
+tests/ @jdamboeck

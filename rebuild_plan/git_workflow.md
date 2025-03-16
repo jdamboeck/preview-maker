@@ -10,6 +10,16 @@ The Preview Maker project uses the following repository:
 - **Main Branch**: `main` - Contains the stable, production-ready code
 - **Development Branch**: `develop` - Integration branch for feature development
 
+## Preferred Tools
+
+For all Git operations, we recommend using GitHub CLI (`gh`) or GitHub MCP functions over direct Git commands:
+
+- **GitHub CLI**: Command-line tool that brings GitHub to your terminal
+- **GitHub MCP Functions**: Functions for GitHub operations in supported environments
+- **Direct Git**: Use only for local operations when GitHub CLI is unavailable
+
+For a comprehensive guide on GitHub CLI usage, see [docs/github_cli_guide.md](../docs/github_cli_guide.md).
+
 ## Branching Strategy
 
 We follow a modified GitFlow workflow with these branch types:
@@ -30,30 +40,49 @@ We follow a modified GitFlow workflow with these branch types:
 
 ### Feature Development
 
-```
+```bash
 # Start from the develop branch
-git checkout develop
-git pull origin develop
+gh api repos/jdamboeck/preview-maker/git/refs/heads/develop --jq '.object.sha'
 
 # Create a feature branch
-git checkout -b feature/image-processor
+gh api repos/jdamboeck/preview-maker/git/refs -f ref="refs/heads/feature/image-processor" \
+  -f sha="$(gh api repos/jdamboeck/preview-maker/git/refs/heads/develop --jq '.object.sha')"
+git fetch
+git checkout feature/image-processor
 
 # Work on your feature with regular commits
 # ...make changes...
 git add .
-git commit -m "Add circular mask generation function"
+git commit -m "feat: Add circular mask generation function"
 
 # Push your branch to the remote repository
-git push -u origin feature/image-processor
+gh pr create --base develop --title "feat: Add circular mask generation" \
+  --body "Implements algorithm for creating circular masks with adjustable parameters."
 ```
 
 ### Code Review Process
 
-1. Create a Pull Request (PR) from your feature branch to the develop branch
-2. Ensure all tests pass in the PR
-3. Request code review from at least one team member
+1. Create a Pull Request (PR) from your feature branch to the develop branch:
+   ```bash
+   gh pr create --base develop --title "feat: Add image processor" \
+     --body "Implements circular mask generation functionality"
+   ```
+
+2. Ensure all tests pass in the PR:
+   ```bash
+   gh pr checks
+   ```
+
+3. Request code review from at least one team member:
+   ```bash
+   gh pr edit --add-reviewer username
+   ```
+
 4. Address review comments with additional commits
-5. Once approved, merge the PR
+5. Once approved, merge the PR:
+   ```bash
+   gh pr merge --merge --delete-branch
+   ```
 
 ### Testing Requirements
 
@@ -73,55 +102,59 @@ We use non-fast-forward merges to maintain a clear history:
 
 ```bash
 # For merging feature branches into develop
-git checkout develop
-git merge --no-ff feature/image-processor
-git push origin develop
+gh pr merge --merge --delete-branch
 ```
 
 ### Release Process
 
 ```bash
 # Create a release branch from develop
-git checkout develop
-git checkout -b release/v1.0.0
+gh api repos/jdamboeck/preview-maker/git/refs -f ref="refs/heads/release/v1.0.0" \
+  -f sha="$(gh api repos/jdamboeck/preview-maker/git/refs/heads/develop --jq '.object.sha')"
+git fetch
+git checkout release/v1.0.0
 
 # Final testing and bug fixes on the release branch
 # ...make changes...
-git commit -m "Fix final issues for v1.0.0"
+git commit -m "fix: Final issues for v1.0.0"
 
-# Merge to main when ready
-git checkout main
-git merge --no-ff release/v1.0.0
-git tag -a v1.0.0 -m "Version 1.0.0"
-git push origin main --tags
+# Create PR to main when ready
+gh pr create --base main --title "release: v1.0.0" \
+  --body "Release version 1.0.0"
 
-# Also merge back to develop
-git checkout develop
-git merge --no-ff release/v1.0.0
-git push origin develop
+# After PR is approved and merged, create the release
+gh release create v1.0.0 --title "Version 1.0.0" \
+  --notes "See CHANGELOG.md for details" --target main
+
+# Also create PR to merge back to develop
+gh pr create --base develop --head main --title "chore: Sync release to develop" \
+  --body "Brings release changes back to develop branch"
 ```
 
 ### Hotfix Process
 
 ```bash
 # Create hotfix branch from main
-git checkout main
-git checkout -b hotfix/critical-bug-fix
+gh api repos/jdamboeck/preview-maker/git/refs -f ref="refs/heads/hotfix/critical-bug-fix" \
+  -f sha="$(gh api repos/jdamboeck/preview-maker/git/refs/heads/main --jq '.object.sha')"
+git fetch
+git checkout hotfix/critical-bug-fix
 
 # Fix the issue
 # ...make changes...
-git commit -m "Fix critical bug in production"
+git commit -m "fix: Critical bug in production"
 
-# Merge to main
-git checkout main
-git merge --no-ff hotfix/critical-bug-fix
-git tag -a v1.0.1 -m "Version 1.0.1"
-git push origin main --tags
+# Create PR to main
+gh pr create --base main --title "fix: Critical production bug" \
+  --body "Fixes critical issue in production"
 
-# Also merge to develop
-git checkout develop
-git merge --no-ff hotfix/critical-bug-fix
-git push origin develop
+# After PR is approved and merged, create the patch release
+gh release create v1.0.1 --title "Hotfix v1.0.1" \
+  --notes "Emergency fix for critical issue" --target main
+
+# Also create PR to merge to develop
+gh pr create --base develop --head main --title "fix: Sync hotfix to develop" \
+  --body "Brings hotfix from main into develop"
 ```
 
 ## Commit Message Guidelines
@@ -150,19 +183,50 @@ feat: Add circular mask generation function
 - Optimizes performance for large images
 ```
 
-## Git Hooks
+## Pre-commit Hooks
 
-Consider using pre-commit hooks to ensure:
+We use pre-commit hooks to ensure:
 - Code passes linting
 - Tests pass before committing
 - No debug code is committed
 - Commit messages follow guidelines
 
+To set up pre-commit hooks:
+```bash
+pip install pre-commit
+pre-commit install
+```
+
+## GitHub MCP Functions
+
+When working in environments that support MCP functions, use them for GitHub operations:
+
+```javascript
+// Create a pull request
+mcp_github_create_pull_request({
+  owner: "jdamboeck",
+  repo: "preview-maker",
+  title: "feat: Add new feature",
+  body: "Implements...\n\nCloses #123",
+  head: "feature/my-feature",
+  base: "develop"
+});
+
+// Create a new issue
+mcp_github_create_issue({
+  owner: "jdamboeck",
+  repo: "preview-maker",
+  title: "bug: Something is broken",
+  body: "When I do X, Y happens instead of Z",
+  labels: ["bug", "priority-high"]
+});
+```
+
 ## Repository Setup for New Contributors
 
 ```bash
-# Clone the repository
-git clone https://github.com/jdamboeck/preview-maker.git
+# Clone the repository using GitHub CLI
+gh repo clone jdamboeck/preview-maker
 cd preview-maker
 
 # Set up your environment
@@ -170,29 +234,42 @@ docker-compose -f rebuild_plan/docker/docker-compose.yml build
 docker-compose -f rebuild_plan/docker/docker-compose.yml run --rm verify
 ```
 
-## Common Git Commands
+## Common GitHub CLI Commands
 
-### Check Status
+### Check Repository Status
 ```bash
-git status
+gh repo view
 ```
 
 ### Create Branch
 ```bash
-git checkout -b feature/my-feature
+gh api repos/jdamboeck/preview-maker/git/refs -f ref="refs/heads/feature/my-feature" \
+  -f sha="$(gh api repos/jdamboeck/preview-maker/git/refs/heads/develop --jq '.object.sha')"
 ```
 
-### Update from Remote
+### List Pull Requests
 ```bash
-git pull origin branch-name
+gh pr list
 ```
 
-### Discard Working Changes
+### View Issues
 ```bash
-git checkout -- file-name
+gh issue list
 ```
 
-### Show Commit History
+### View Commit History
 ```bash
-git log --oneline --graph --decorate
+gh api repos/jdamboeck/preview-maker/commits --jq '.[] | [.sha[0:7], .commit.message] | join(" ")'
 ```
+
+## Branch Protection Rules
+
+We enforce branch protection rules for the `main` and `develop` branches:
+
+1. Require pull request reviews before merging
+2. Require status checks to pass before merging
+3. Require branches to be up to date before merging
+4. Prohibit force pushes and deletion of protected branches
+5. Include administrators in these restrictions
+
+For more information, see [docs/branch_protection_rules.md](../docs/branch_protection_rules.md).
