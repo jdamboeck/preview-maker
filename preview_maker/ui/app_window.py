@@ -21,6 +21,8 @@ from preview_maker.ai.analyzer import ImageAnalyzer
 from preview_maker.ai.integration import AIPreviewGenerator
 from preview_maker.ui.image_view import ImageView
 from preview_maker.ui.overlay_manager import OverlayManager
+from preview_maker.ui.manual_overlay_manager import ManualOverlayManager
+from preview_maker.ui.overlay_controls import OverlayControlPanel
 
 
 class ApplicationWindow(Gtk.ApplicationWindow):
@@ -36,6 +38,7 @@ class ApplicationWindow(Gtk.ApplicationWindow):
         preview_generator: The AIPreviewGenerator instance
         image_view: The ImageView widget for displaying images
         overlay_manager: The OverlayManager for managing highlight overlays
+        manual_overlay_manager: The ManualOverlayManager for manual overlays
     """
 
     def __init__(self, application: Gtk.Application) -> None:
@@ -92,25 +95,77 @@ class ApplicationWindow(Gtk.ApplicationWindow):
         settings_button.connect("clicked", self._on_settings_clicked)
         header_bar.pack_end(settings_button)
 
+        # Manual mode toggle button
+        self.manual_mode_button = Gtk.ToggleButton(label="Manual Mode")
+        self.manual_mode_button.connect("toggled", self._on_manual_mode_toggled)
+        header_bar.pack_end(self.manual_mode_button)
+
     def _create_main_layout(self) -> None:
         """Create the main layout for the window."""
         # Main box
-        self.main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        self.main_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         self.set_child(self.main_box)
+
+        # Left panel for controls
+        self.left_panel = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        self.left_panel.set_size_request(250, -1)  # Width, natural height
+        self.main_box.append(self.left_panel)
+
+        # Content area
+        self.content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        self.content_box.set_hexpand(True)
+        self.main_box.append(self.content_box)
 
         # Create image view
         self.image_view = ImageView()
         self.image_view.set_vexpand(True)
         self.image_view.set_hexpand(True)
-        self.main_box.append(self.image_view)
+        self.content_box.append(self.image_view)
 
-        # Create overlay manager
+        # Create overlay managers
         self.overlay_manager = OverlayManager(self.image_view)
+        self.manual_overlay_manager = ManualOverlayManager(self.image_view)
+
+        # Create overlay controls (initially hidden)
+        self.overlay_controls = OverlayControlPanel(self.manual_overlay_manager)
+        self.overlay_controls.set_visible(False)
+        self.left_panel.append(self.overlay_controls)
 
         # Create status bar
         self.status_bar = Gtk.Label(label="Ready")
         self.status_bar.set_xalign(0)  # Align to the left
-        self.main_box.append(self.status_bar)
+        self.content_box.append(self.status_bar)
+
+    def _on_manual_mode_toggled(self, button: Gtk.ToggleButton) -> None:
+        """Handle manual mode toggle button.
+
+        Args:
+            button: The button that was toggled
+        """
+        manual_mode = button.get_active()
+        self.overlay_controls.set_visible(manual_mode)
+
+        # Switch between overlay managers
+        if manual_mode:
+            # Switch to manual mode
+            # Copy overlays from AI overlay manager if any exist
+            if len(self.overlay_manager.get_overlays()) > 0:
+                for (
+                    overlay_id,
+                    overlay_data,
+                ) in self.overlay_manager.get_overlays().items():
+                    position, radius = overlay_data
+                    x, y = position
+                    self.manual_overlay_manager.create_overlay_at(x, y)
+
+            # Clear AI overlays and apply manual ones
+            self.overlay_manager.clear_overlays()
+            self.status_bar.set_text("Switched to manual overlay mode")
+        else:
+            # Switch back to AI mode
+            # Clear manual overlays
+            self.manual_overlay_manager.clear_overlays()
+            self.status_bar.set_text("Switched to AI overlay mode")
 
     def _setup_drag_and_drop(self) -> None:
         """Set up drag and drop support."""
