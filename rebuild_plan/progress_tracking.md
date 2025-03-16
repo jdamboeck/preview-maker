@@ -198,6 +198,12 @@ Use this section to document important decisions, design changes, or other notab
   - Function correctly accepts both string and numeric log levels
   - log_level parameter takes precedence over level when both are provided
   - Added comprehensive tests for the log_level parameter to verify type handling and precedence
+- 2024-05-27: GTK UI Testing Framework implemented
+  - Added robust Xwayland testing environment for GTK UI components
+  - Implemented comprehensive tests for overlay controls
+  - Created reusable GTKTestBase class for UI testing
+  - Added support for both headless and interactive testing modes
+  - Documented testing approach in testing guide
 
 ## Next Steps
 
