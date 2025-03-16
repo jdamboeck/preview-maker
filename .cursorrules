@@ -112,6 +112,7 @@ When working on this project, always follow these Docker-related practices:
 6. Update documentation as needed
 7. Verify changes against the risk management plan
 8. Track progress in rebuild_plan/progress_tracking.md
+9. Use GitHub CLI for all repository operations (see docs/github_cli_guide.md)
 
 ## Git Workflow
 Follow the standardized Git workflow outlined in rebuild_plan/git_workflow.md:
