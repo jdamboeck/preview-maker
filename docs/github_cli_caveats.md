@@ -11,6 +11,42 @@ When using GitHub CLI for automation or in non-interactive contexts, you may enc
 3. **Auth tokens need proper handling**
 4. **Error handling is limited in non-interactive mode**
 
+## Command Limitations
+
+### Multi-line Commands
+
+Issue: GitHub CLI commands with multiple lines fail with error: "Command contains newline characters. Please write a single command without newlines"
+
+**Example of failing command:**
+
+```bash
+content=$(echo -n "# Test content
+
+More content" | base64 -w0)
+
+gh api repos/owner/repo/contents/path -X PUT \
+  -f message="commit message" \
+  -f content="$content" \
+  -f branch="branch-name"
+```
+
+**Working solution:**
+
+```bash
+content=$(echo -n "# Test\n\nMore content" | base64 -w0) && gh api repos/owner/repo/contents/path -X PUT -f message="commit message" -f content="$content" -f branch="branch-name"
+```
+
+### Complex Content with Special Characters
+
+Issue: Content with special characters can cause escaping problems.
+
+**Working solution with temp file:**
+
+```bash
+echo -n "# Complex content with 'quotes' and \"double quotes\"" | base64 -w0 > /tmp/content.txt && \
+gh api repos/owner/repo/contents/path -X PUT -f message="message" -f content="$(cat /tmp/content.txt)" -f branch="branch"
+```
+
 ## Solutions for Common Issues
 
 ### Working with Multi-line Content
@@ -76,9 +112,11 @@ gh api repos/jdamboeck/preview-maker/pulls -f title="feat: Add new feature" \
   -f base="develop" | cat
 ```
 
-### Helper Functions for Common Operations
+## Helper Script Approach
 
-Use these helper functions in your bash scripts:
+For complex operations, you can use either a Bash or Python helper script to generate commands:
+
+### Bash Helper Functions
 
 ```bash
 #!/bin/bash
@@ -135,9 +173,7 @@ create_pr() {
 }
 ```
 
-## Python Script for GitHub CLI Operations
-
-For more complex operations, use this Python helper script:
+### Python Helper Script
 
 ```python
 #!/usr/bin/env python3
@@ -207,31 +243,47 @@ def create_pr_command(
     ]
     
     return " && ".join(commands)
-
-# Example usage
-if __name__ == "__main__":
-    print("# Branch creation command:")
-    print(create_branch_command("jdamboeck", "preview-maker", "feature/my-feature"))
-    
-    print("\n# File creation command:")
-    print(create_file_command(
-        "jdamboeck", 
-        "preview-maker", 
-        "README.md", 
-        "# Project Title\n\nThis is a sample README with **markdown**.", 
-        "feature/my-feature",
-        "docs: Update README"
-    ))
-    
-    print("\n# PR creation command:")
-    print(create_pr_command(
-        "jdamboeck", 
-        "preview-maker", 
-        "feat: Add new feature", 
-        "This PR adds a new feature.\n\n- Item 1\n- Item 2\n\nFixes #123", 
-        "feature/my-feature"
-    ))
 ```
+
+## Multiple Files in One Commit
+
+Issue: GitHub CLI API requires separate calls for each file, unlike MCP's `push_files`.
+
+**Working approach:**
+
+1. Create a script that iterates through files and generates commands
+2. Use `gh` CLI for a shell script approach (more complex)
+3. When possible, always prefer MCP's `push_files` function
+
+## Template Usage
+
+### Pull Request Templates
+
+PR templates work correctly with both MCP functions and GitHub CLI API:
+
+```javascript
+// With MCP functions
+mcp_github_create_pull_request({
+  owner: "jdamboeck",
+  repo: "preview-maker",
+  title: "feat: Add feature",
+  body: "# Pull Request\n\n## Description\nThis is a feature\n\n## Type of Change\n- [x] New feature",
+  head: "feature/branch",
+  base: "develop"
+});
+```
+
+```bash
+# With GitHub CLI API
+gh api repos/jdamboeck/preview-maker/pulls -f title="feat: Add feature" \
+  -f body="# Pull Request\n\n## Description\nThis is a feature\n\n## Type of Change\n- [x] New feature" \
+  -f head="feature/branch" \
+  -f base="develop"
+```
+
+### Issue Templates
+
+Issue templates work correctly when manually structured in the body content.
 
 ## Important Recommendations
 
@@ -241,5 +293,7 @@ if __name__ == "__main__":
 4. **Prefer MCP functions over GitHub CLI** whenever available
 5. **Test commands in a safe environment** before using in production workflows
 6. **For truly complex operations**, consider using the GitHub API directly with proper HTTP clients
+7. **Use single-line commands with escaped newlines** when necessary
+8. **Consider helper scripts for complex operations** to make commands more maintainable
 
 By following these guidelines, you can reliably automate GitHub operations while avoiding common pitfalls with the GitHub CLI.

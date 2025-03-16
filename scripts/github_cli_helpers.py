@@ -1,28 +1,156 @@
+#!/usr/bin/env python3
+# File: scripts/github_cli_helpers.py
+
+import base64
+import subprocess
 import json
+import os
+from typing import List, Dict, Optional, Any
 
-# Create a feature branch with GitHub CLI API
-def create_branch(owner, repo, branch, from_branch="develop"):
-    """Create a new branch non-interactively."""
-    head_sha = f"$(gh api repos/{owner}/{repo}/git/refs/heads/{from_branch} --jq '.object.sha')"
-    command = f"gh api repos/{owner}/{repo}/git/refs -f ref='refs/heads/{branch}' -f sha='{head_sha}'"
-    print(f"Command to run: {command}")
+def create_branch(owner: str, repo: str, branch: str, base_branch: str = "develop") -> str:
+    """Generate command to create a new branch."""
+    command = (
+        f"head_sha=$(gh api repos/{owner}/{repo}/git/refs/heads/{base_branch} --jq '.object.sha') && "
+        f"gh api repos/{owner}/{repo}/git/refs -f ref=\"refs/heads/{branch}\" -f sha=\"$head_sha\" | cat"
+    )
+    result = subprocess.run(command, shell=True, capture_output=True, text=True)
+    return result.stdout
 
-# Create a file with GitHub CLI API  
-def create_file(owner, repo, path, content, branch, message):
-    """Create a file non-interactively."""
-    content_b64 = "$(echo -n '" + content.replace("'", "'\\''") + "' | base64 -w0)"
-    command = f"gh api repos/{owner}/{repo}/contents/{path} -X PUT -f message='{message}' -f content='{content_b64}' -f branch='{branch}'"
-    print(f"Command to run: {command}")
+def create_file(
+    owner: str, 
+    repo: str, 
+    path: str, 
+    content: str, 
+    branch: str, 
+    message: str = None
+) -> str:
+    """Create a file with content using GitHub CLI API."""
+    if message is None:
+        message = f"Add {path}"
+    
+    # Create a temporary file for the content
+    tmp_file = f"/tmp/gh_content_{os.path.basename(path).replace('.', '_')}.b64"
+    
+    # Write content to temporary file and encode
+    with open(tmp_file, 'w') as f:
+        f.write(content)
+    
+    # Base64 encode the content
+    encoded_content = base64.b64encode(content.encode('utf-8')).decode('utf-8')
+    
+    # Write encoded content to temp file
+    with open(tmp_file, 'w') as f:
+        f.write(encoded_content)
+    
+    # Create the command
+    command = (
+        f"gh api repos/{owner}/{repo}/contents/{path} -X PUT "
+        f"-f message='{message.replace(\"'\", \"'\\''\")}' "
+        f"-f content=\"$(cat {tmp_file})\" "
+        f"-f branch='{branch}' | cat"
+    )
+    
+    # Execute command
+    result = subprocess.run(command, shell=True, capture_output=True, text=True)
+    
+    # Clean up temp file
+    if os.path.exists(tmp_file):
+        os.remove(tmp_file)
+    
+    return result.stdout
 
-# Create a pull request with GitHub CLI API
-def create_pr(owner, repo, title, body, head, base="develop"):
-    """Create a PR non-interactively."""
-    body_escaped = json.dumps(body)
-    command = f"gh api repos/{owner}/{repo}/pulls -f title='{title}' -f body={body_escaped} -f head='{head}' -f base='{base}'"
-    print(f"Command to run: {command}")
+def create_pr(
+    owner: str, 
+    repo: str, 
+    title: str, 
+    body: str, 
+    head: str, 
+    base: str = "develop"
+) -> str:
+    """Create a pull request using GitHub CLI API."""
+    # Create a temporary file for the PR body
+    tmp_file = f"/tmp/gh_pr_body_{head.replace('/', '_')}.txt"
+    
+    # Write body to temporary file
+    with open(tmp_file, 'w') as f:
+        f.write(body)
+    
+    # Create the command
+    command = (
+        f"gh api repos/{owner}/{repo}/pulls "
+        f"-f title='{title.replace(\"'\", \"'\\''\")}' "
+        f"-f body=\"$(cat {tmp_file})\" "
+        f"-f head='{head}' "
+        f"-f base='{base}' | cat"
+    )
+    
+    # Execute command
+    result = subprocess.run(command, shell=True, capture_output=True, text=True)
+    
+    # Clean up temp file
+    if os.path.exists(tmp_file):
+        os.remove(tmp_file)
+    
+    return result.stdout
 
-# Example usage
-if __name__ == "__main__":
-    create_branch("jdamboeck", "preview-maker", "feature/test-branch")
-    create_file("jdamboeck", "preview-maker", "README.md", "# Test\n\nThis is a test.", "feature/test-branch", "Update README")
-    create_pr("jdamboeck", "preview-maker", "Update README", "This PR updates the README.", "feature/test-branch")
+def merge_pr(
+    owner: str,
+    repo: str,
+    pr_number: int,
+    merge_method: str = "merge"
+) -> str:
+    """Merge a pull request using GitHub CLI API."""
+    command = (
+        f"gh api repos/{owner}/{repo}/pulls/{pr_number}/merge -X PUT "
+        f"-f merge_method='{merge_method}' | cat"
+    )
+    result = subprocess.run(command, shell=True, capture_output=True, text=True)
+    return result.stdout
+
+def delete_branch(
+    owner: str,
+    repo: str,
+    branch: str
+) -> str:
+    """Delete a branch using GitHub CLI API."""
+    command = f"gh api repos/{owner}/{repo}/git/refs/heads/{branch} -X DELETE | cat"
+    result = subprocess.run(command, shell=True, capture_output=True, text=True)
+    return result.stdout
+
+def create_issue(
+    owner: str,
+    repo: str,
+    title: str,
+    body: str,
+    labels: List[str] = None
+) -> str:
+    """Create an issue using GitHub CLI API."""
+    # Create a temporary file for the issue body
+    tmp_file = f"/tmp/gh_issue_body_{title.replace(' ', '_')}.txt"
+    
+    # Write body to temporary file
+    with open(tmp_file, 'w') as f:
+        f.write(body)
+    
+    # Create the base command
+    command = (
+        f"gh api repos/{owner}/{repo}/issues "
+        f"-f title='{title.replace(\"'\", \"'\\''\")}' "
+        f"-f body=\"$(cat {tmp_file})\" "
+    )
+    
+    # Add labels if provided
+    if labels and len(labels) > 0:
+        labels_json = json.dumps(labels)
+        command += f"-f labels='{labels_json}' "
+    
+    command += "| cat"
+    
+    # Execute command
+    result = subprocess.run(command, shell=True, capture_output=True, text=True)
+    
+    # Clean up temp file
+    if os.path.exists(tmp_file):
+        os.remove(tmp_file)
+    
+    return result.stdout
