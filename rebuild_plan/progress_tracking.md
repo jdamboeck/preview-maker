@@ -45,7 +45,7 @@ This document tracks the progress of the Preview Maker rebuild implementation. U
 | Manual Overlay Management | Completed | - | Implemented as ManualOverlayManager class with OverlayControlPanel |
 | User Controls | Completed | - | Added buttons for open, save, analyze, and settings |
 | Drag-and-Drop Support | Completed | - | Added support for dropping image files |
-| UI Tests | In Progress | - | Mock implementation needs fixes for GTK Application testing |
+| UI Tests | Completed | #17 | Fixed mock implementation for GTK Application testing in headless environments |
 
 ### Integration Layer
 | Component | Status | Pull Request | Notes |
@@ -70,7 +70,7 @@ This document tracks the progress of the Preview Maker rebuild implementation. U
 | Configuration Management | ~100% | Completed | All tests passing |
 | Image Processing | ~100% | Completed | All tests now passing |
 | AI Integration | ~85% | In Progress | ResponseParser and ImageAnalyzer tests passing, integration tests partially passing |
-| UI Components | ~70% | In Progress | Mock-based testing not working with GTK component initialization |
+| UI Components | ~100% | Completed | All tests passing with improved GTK mocking using system-wide module patching |
 | Event System | ~100% | Completed | All tests passing, including thread safety and async operation tests |
 
 ### Integration Tests
@@ -84,7 +84,7 @@ This document tracks the progress of the Preview Maker rebuild implementation. U
 ### UI Tests
 | Test Area | Status | Notes |
 |-----------|--------|-------|
-| Main Window | In Progress | Tests failing due to GTK mock types |
+| Main Window | Completed | Tests for the ApplicationWindow class working in both normal and headless environments |
 | Image Display | Completed | Tests for image view widget |
 | User Controls | Completed | Tests for buttons and controls |
 | Drag and Drop | Completed | Tests for drag and drop functionality |
@@ -121,10 +121,10 @@ This document tracks the progress of the Preview Maker rebuild implementation. U
 | GTK 4.0 Type Hints | Linter errors for GTK types | Add stub files or type comments | To Be Addressed |
 | Cairo Integration | Linter errors for Cairo types | Fix import issues and add proper type hints | To Be Addressed |
 | API Mismatches | Test failures | Update implementations to match test expectations | In Progress |
-| UI Test Mocks | UI tests failing | Fix mock implementation for GTK Application tests | To Be Addressed |
+| UI Test Mocks | UI tests failing | Fix mock implementation for GTK Application tests | Resolved (PRs #17, #20) |
 | AIPreviewGenerator API | Integration tests failing | Update AIPreviewGenerator to match test expectations | In Progress |
 | Configuration Management | Tests failing | Implement ConfigManager with _reset_for_testing method | Resolved |
-| Logging System | Tests failing | Update setup_logging to accept log_level parameter | To Be Addressed |
+| Logging System | Tests failing | Update setup_logging to accept log_level parameter | Resolved |
 
 ## Notes
 
@@ -189,27 +189,29 @@ Use this section to document important decisions, design changes, or other notab
   - Added toggle for switching between AI and manual modes
   - Implemented drag-and-drop for overlay positioning
   - Added tests for manual overlay management
+- 2024-05-26: Logging System issue verified as resolved
+  - Confirmed setup_logging function properly handles log_level parameter
+  - All logging tests are passing
+  - Function correctly accepts both string and numeric log levels
+  - log_level parameter takes precedence over level when both are provided
+  - Added comprehensive tests for the log_level parameter to verify type handling and precedence
 
 ## Next Steps
 
 Based on our current progress, the following tasks should be prioritized:
 
-1. **Update Logging System**
-   - Fix setup_logging to accept log_level parameter
-   - Ensure all logging tests pass
-
-2. **Fix UI Test Mocks**
+1. **Fix UI Test Mocks**
    - Update mock implementation for GTK Application tests
    - Ensure UI tests can run in headless mode
 
-3. **Fix Image Cache Tests**
+2. **Fix Image Cache Tests**
    - Update ImageCache to work with new configuration structure
    - Add cache_dir to PreviewMakerConfig or adapt tests to use existing paths
 
-4. **Test Manual Overlay Manager**
+3. **Test Manual Overlay Manager**
    - Ensure manual overlay creation and management works properly
    - Verify integration with ApplicationWindow and ImageView
 
-5. **Address Linter Errors**
+4. **Address Linter Errors**
    - Add type hints for GTK and Cairo
    - Fix remaining linter errors in the codebase
