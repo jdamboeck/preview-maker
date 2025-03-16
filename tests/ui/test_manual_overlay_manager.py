@@ -1,0 +1,194 @@
+"""Tests for the ManualOverlayManager class.
+
+This module contains tests for the ManualOverlayManager class, which allows
+manual creation and positioning of overlays.
+"""
+
+import pytest
+from unittest.mock import MagicMock, patch
+
+import gi
+
+gi.require_version("Gtk", "4.0")
+from gi.repository import Gtk, Gdk
+
+from PIL import Image
+
+from preview_maker.ui.manual_overlay_manager import ManualOverlayManager
+from preview_maker.ui.image_view import ImageView
+from preview_maker.image.processor import ImageProcessor
+
+
+class TestManualOverlayManager:
+    """Tests for the ManualOverlayManager class."""
+
+    @pytest.fixture
+    def mock_image_view(self):
+        """Create a mock ImageView."""
+        mock = MagicMock(spec=ImageView)
+        # Create a test image
+        test_image = Image.new("RGB", (100, 100), color="white")
+        mock.get_image.return_value = test_image
+        return mock
+
+    @pytest.fixture
+    def overlay_manager(self, mock_image_view):
+        """Create a ManualOverlayManager with a mock ImageView."""
+        return ManualOverlayManager(mock_image_view)
+
+    def test_initialization(self, overlay_manager, mock_image_view):
+        """Test initialization of the ManualOverlayManager."""
+        assert overlay_manager.image_view == mock_image_view
+        assert overlay_manager.overlays == {}
+        assert overlay_manager.selected_overlay_id is None
+        assert overlay_manager.default_radius == 50
+        assert overlay_manager.default_color == "#ff0000"
+
+    def test_create_overlay_at(self, overlay_manager):
+        """Test creating an overlay at a specific position."""
+        overlay_id = overlay_manager.create_overlay_at(50, 50)
+
+        # Verify overlay was created
+        assert len(overlay_manager.overlays) == 1
+        assert overlay_id in overlay_manager.overlays
+
+        # Verify overlay properties
+        position, radius = overlay_manager.overlays[overlay_id]
+        assert position == (50, 50)
+        assert radius == 50
+
+    def test_select_overlay(self, overlay_manager):
+        """Test selecting an overlay."""
+        # Create an overlay
+        overlay_id = overlay_manager.create_overlay_at(50, 50)
+
+        # Select the overlay
+        overlay_manager.select_overlay(overlay_id)
+        assert overlay_manager.selected_overlay_id == overlay_id
+
+        # Deselect the overlay
+        overlay_manager.select_overlay(None)
+        assert overlay_manager.selected_overlay_id is None
+
+    def test_delete_selected_overlay(self, overlay_manager):
+        """Test deleting the selected overlay."""
+        # Create and select an overlay
+        overlay_id = overlay_manager.create_overlay_at(50, 50)
+        overlay_manager.select_overlay(overlay_id)
+
+        # Delete the selected overlay
+        overlay_manager.delete_selected_overlay()
+
+        # Verify overlay was deleted
+        assert len(overlay_manager.overlays) == 0
+        assert overlay_manager.selected_overlay_id is None
+
+    def test_set_overlay_radius(self, overlay_manager):
+        """Test setting the radius of the selected overlay."""
+        # Create and select an overlay
+        overlay_id = overlay_manager.create_overlay_at(50, 50)
+        overlay_manager.select_overlay(overlay_id)
+
+        # Set a new radius
+        overlay_manager.set_overlay_radius(75)
+
+        # Verify the radius was updated
+        position, radius = overlay_manager.overlays[overlay_id]
+        assert radius == 75
+
+    def test_update_selected_overlay(self, overlay_manager):
+        """Test updating the position of the selected overlay."""
+        # Create and select an overlay
+        overlay_id = overlay_manager.create_overlay_at(50, 50)
+        overlay_manager.select_overlay(overlay_id)
+
+        # Update position
+        overlay_manager.update_selected_overlay(75, 75)
+
+        # Verify position was updated
+        position, radius = overlay_manager.overlays[overlay_id]
+        assert position == (75, 75)
+
+    def test_clear_overlays(self, overlay_manager):
+        """Test clearing all overlays."""
+        # Create multiple overlays
+        overlay_manager.create_overlay_at(25, 25)
+        overlay_manager.create_overlay_at(50, 50)
+        overlay_manager.create_overlay_at(75, 75)
+
+        assert len(overlay_manager.overlays) == 3
+
+        # Clear overlays
+        overlay_manager.clear_overlays()
+
+        # Verify all overlays were removed
+        assert len(overlay_manager.overlays) == 0
+        assert overlay_manager.selected_overlay_id is None
+
+    def test_get_selected_overlay(self, overlay_manager):
+        """Test getting the selected overlay."""
+        # Create and select an overlay
+        overlay_id = overlay_manager.create_overlay_at(50, 50)
+        overlay_manager.select_overlay(overlay_id)
+
+        # Get selected overlay
+        selected = overlay_manager.get_selected_overlay()
+
+        # Verify the correct overlay was returned
+        assert selected is not None
+        assert selected[0] == overlay_id
+        assert selected[1][0] == (50, 50)  # position
+        assert selected[1][1] == 50  # radius
+
+    def test_get_overlays(self, overlay_manager):
+        """Test getting all overlays."""
+        # Create multiple overlays
+        overlay_manager.create_overlay_at(25, 25)
+        overlay_manager.create_overlay_at(50, 50)
+
+        # Get all overlays
+        overlays = overlay_manager.get_overlays()
+
+        # Verify overlays were returned
+        assert len(overlays) == 2
+        for overlay_id, overlay_data in overlays.items():
+            assert isinstance(overlay_id, str)
+            position, radius = overlay_data
+            assert isinstance(position, tuple)
+            assert len(position) == 2
+            assert isinstance(radius, int)
+
+    @patch("preview_maker.ui.manual_overlay_manager.logger")
+    def test_apply_overlays(self, mock_logger, overlay_manager, mock_image_view):
+        """Test applying overlays to the image."""
+        # Create overlays
+        overlay_manager.create_overlay_at(25, 25)
+        overlay_manager.create_overlay_at(50, 50)
+
+        # Call _apply_overlays
+        overlay_manager._apply_overlays()
+
+        # Verify image update was triggered
+        mock_image_view.add_overlay.assert_called()
+
+        # Verify logger was called
+        mock_logger.debug.assert_called()
+
+    def test_find_overlay_at(self, overlay_manager):
+        """Test finding an overlay at a specific position."""
+        # Create overlays
+        id1 = overlay_manager.create_overlay_at(25, 25)
+        id2 = overlay_manager.create_overlay_at(75, 75)
+
+        # Find overlay at the center of the first overlay
+        found_id = overlay_manager._find_overlay_at(25, 25)
+        assert found_id == id1
+
+        # Find overlay near the edge of the second overlay's radius
+        found_id = overlay_manager._find_overlay_at(100, 75)  # Outside radius
+        assert found_id is None
+
+        found_id = overlay_manager._find_overlay_at(
+            90, 75
+        )  # Within radius (assuming default 50)
+        assert found_id == id2

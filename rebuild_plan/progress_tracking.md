@@ -42,6 +42,7 @@ This document tracks the progress of the Preview Maker rebuild implementation. U
 | Main Application Window | Completed | - | Implemented as ApplicationWindow class |
 | Image Display Widget | Completed | - | Implemented as ImageView class |
 | Overlay Management | Completed | - | Implemented as OverlayManager class |
+| Manual Overlay Management | Completed | - | Implemented as ManualOverlayManager class with OverlayControlPanel |
 | User Controls | Completed | - | Added buttons for open, save, analyze, and settings |
 | Drag-and-Drop Support | Completed | - | Added support for dropping image files |
 | UI Tests | In Progress | - | Mock implementation needs fixes for GTK Application testing |
@@ -182,6 +183,12 @@ Use this section to document important decisions, design changes, or other notab
   - All AI component tests are passing (24 tests total)
   - Fixed test mocking issues in AIPreviewGenerator
   - Ready to merge feature/ai-integration branch to develop
+- 2024-05-25: Manual Overlay Management implemented
+  - Created ManualOverlayManager class for user-defined overlays
+  - Implemented OverlayControlPanel for UI controls (radius adjustment, color selection)
+  - Added toggle for switching between AI and manual modes
+  - Implemented drag-and-drop for overlay positioning
+  - Added tests for manual overlay management
 
 ## Next Steps
 
@@ -199,6 +206,10 @@ Based on our current progress, the following tasks should be prioritized:
    - Update ImageCache to work with new configuration structure
    - Add cache_dir to PreviewMakerConfig or adapt tests to use existing paths
 
-4. **Address Linter Errors**
+4. **Test Manual Overlay Manager**
+   - Ensure manual overlay creation and management works properly
+   - Verify integration with ApplicationWindow and ImageView
+
+5. **Address Linter Errors**
    - Add type hints for GTK and Cairo
    - Fix remaining linter errors in the codebase
