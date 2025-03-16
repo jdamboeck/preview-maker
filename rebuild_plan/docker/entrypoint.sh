@@ -1,138 +1,119 @@
 #!/bin/bash
-set -e
+# Docker entrypoint script
 
-# Set up environment
-export PYTHONPATH="/app:${PYTHONPATH}"
+# Set environment variables
+export PYTHONPATH=$PYTHONPATH:$(pwd)
 
-# Helper functions
-function run_tests() {
+# Function to run tests
+run_tests() {
     echo "Running tests with pytest..."
-    cd /app
-    python -m pytest $@
+    python -m pytest "$@"
 }
 
-function run_xvfb() {
-    echo "Setting up Xvfb display server..."
-
-    # Check if Xvfb is already running and kill it
-    if pgrep -x "Xvfb" > /dev/null; then
-        echo "Existing Xvfb process found, stopping it..."
-        pkill -x Xvfb || true
-        sleep 1
+# Function to run Xvfb if needed
+run_xvfb() {
+    if [ "${HEADLESS:-0}" = "1" ] && [ -z "${DISPLAY}" ]; then
+        echo "Starting Xvfb for headless testing..."
+        Xvfb :99 -screen 0 1280x1024x24 -ac &
+        export DISPLAY=:99
+        export GDK_BACKEND=x11
+        sleep 1  # Give Xvfb time to start
     fi
 
-    # Make sure the display is free
-    rm -f /tmp/.X0-lock || true
-
-    # Start Xvfb with more options for better compatibility
-    Xvfb :0 -screen 0 1280x1024x24 -ac +extension GLX +render -noreset &
-    export DISPLAY=:0
-    echo "Waiting for Xvfb to start..."
-    sleep 2
-
-    # Verify display is working
-    echo "Testing X11 connection..."
-    xdpyinfo -display :0 >/dev/null 2>&1 || echo "WARNING: X11 display setup failed"
-}
-
-function run_gtk_test() {
-    echo "Running GTK overlay test..."
-    cd /app
-
-    # Set GDK backend explicitly
+    # Ensure we're using X11 backend for GTK
     export GDK_BACKEND=x11
-
-    # Initialize GTK before running the application
-    python -c "import gi; gi.require_version('Gtk', '4.0'); from gi.repository import Gtk; Gtk.init()"
-
-    python rebuild_plan/gtk_overlay_test.py
 }
 
-function run_diagnostics() {
-    echo "Running diagnostic checks..."
-    cd /app
+# Function to run GTK tests
+run_gtk_tests() {
+    echo "Setting up environment for GTK tests..."
+    run_xvfb
 
-    # Check GTK installation
-    python -c "import gi; gi.require_version('Gtk', '4.0'); from gi.repository import Gtk; print('GTK 4.0 is available')"
+    # Run the tests
+    if [ -n "$1" ]; then
+        python -m pytest "$@" -v
+    else
+        python -m pytest tests/ui/ -v
+    fi
+}
 
-    # Check Pillow installation
-    python -c "from PIL import Image, ImageDraw; print('Pillow is available')"
+# Function to run diagnostics
+run_diagnostics() {
+    echo "Running diagnostics..."
+    echo "Python version:"
+    python --version
 
-    # Check Cairo installation
-    python -c "import cairo; print('Cairo is available')"
-
-    # Check system resources
-    echo "System Resources:"
-    free -h
-    df -h
-
-    # Print Python environment
-    echo "Python Environment:"
+    echo "Pip packages:"
     pip list
 
-    # Run more comprehensive diagnostics if docker_diagnostics.py exists
-    if [ -f /app/rebuild_plan/docker/docker_diagnostics.py ]; then
-        echo ""
-        echo "Running comprehensive diagnostics..."
-        python /app/rebuild_plan/docker/docker_diagnostics.py
-    fi
+    echo "GTK version:"
+    python -c "import gi; gi.require_version('Gtk', '4.0'); from gi.repository import Gtk; print(f'GTK version: {Gtk.get_major_version()}.{Gtk.get_minor_version()}.{Gtk.get_micro_version()}')" || echo "GTK not available"
+
+    echo "Display settings:"
+    echo "DISPLAY=$DISPLAY"
+    echo "GDK_BACKEND=$GDK_BACKEND"
+
+    echo "System packages:"
+    apt list --installed | grep -E 'gtk|glib|gobject|cairo'
 }
 
-function run_verification() {
-    echo "Running environment verification..."
-    cd /app
+# Function to verify environment
+verify_environment() {
+    echo "Verifying environment..."
+    run_diagnostics
 
-    if [ -f /app/rebuild_plan/docker/verify_environment.py ]; then
-        python /app/rebuild_plan/docker/verify_environment.py
+    # Try importing GTK
+    python -c "import gi; gi.require_version('Gtk', '4.0'); from gi.repository import Gtk; print('GTK import successful')" || echo "GTK import failed"
+
+    # Check if we can run a simple GTK application
+    if [ -z "${HEADLESS}" ] || [ "${HEADLESS}" != "1" ]; then
+        echo "Testing GTK window creation..."
+        python -c "
+import gi
+gi.require_version('Gtk', '4.0')
+from gi.repository import Gtk, GLib
+import sys
+
+def on_activate(app):
+    win = Gtk.ApplicationWindow(application=app)
+    win.set_default_size(300, 200)
+    win.set_title('Environment Test')
+    win.present()
+    # Close after 1 second
+    GLib.timeout_add(1000, app.quit)
+
+app = Gtk.Application(application_id='com.example.GtkTest')
+app.connect('activate', on_activate)
+sys.exit(app.run(None))
+" || echo "Failed to create GTK window"
     else
-        echo "Verification script not found at /app/rebuild_plan/docker/verify_environment.py"
-        exit 1
+        echo "Skipping GTK window test in headless mode"
     fi
 }
 
-# If no command is provided, show the help message
-if [ $# -eq 0 ]; then
-    echo "Preview Maker Docker Environment"
-    echo "================================"
-    echo "Available commands:"
-    echo "  bash                - Start a bash shell"
-    echo "  test [args]         - Run pytest with optional arguments"
-    echo "  gtk-test            - Run the GTK overlay test"
-    echo "  diag                - Run diagnostic checks"
-    echo "  verify              - Run environment verification"
-    echo "  dev                 - Start development environment with Xvfb"
-    echo "  help                - Show this help message"
-    echo ""
-    echo "Example: docker-compose run --rm preview-maker test -v"
-    exit 0
-fi
-
-# Process the command
+# Process commands
 case "$1" in
     test)
         shift
-        run_xvfb
-        run_tests $@
+        run_tests "$@"
         ;;
     gtk-test)
-        run_xvfb
-        run_gtk_test
+        shift
+        run_gtk_tests "$@"
         ;;
-    diag)
+    diagnostics)
         run_diagnostics
         ;;
     verify)
-        run_verification
-        ;;
-    dev)
-        run_xvfb
-        exec bash
-        ;;
-    help)
-        exec $0
+        verify_environment
         ;;
     *)
-        # Execute the provided command
-        exec "$@"
+        # If command starts with "pytest", run tests
+        if [[ "$1" == "pytest"* ]]; then
+            run_tests "$@"
+        else
+            # Otherwise execute the command
+            exec "$@"
+        fi
         ;;
 esac
