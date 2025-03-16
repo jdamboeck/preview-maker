@@ -112,6 +112,7 @@ When working on this project, always follow these Docker-related practices:
 6. Update documentation as needed
 7. Verify changes against the risk management plan
 8. Track progress in rebuild_plan/progress_tracking.md
+9. Use GitHub CLI for all repository operations (see docs/github_cli_guide.md)
 
 ## Git Workflow
 Follow the standardized Git workflow outlined in rebuild_plan/git_workflow.md:
@@ -121,22 +122,33 @@ Follow the standardized Git workflow outlined in rebuild_plan/git_workflow.md:
    - Name branches according to the pattern: feature/<feature-name>, bugfix/<bug-description>, etc.
    - Keep branches focused on single features or fixes
 
-2. **Commit Standards**:
+2. **Preferred Git Tools**:
+   - Use GitHub CLI (`gh`) or MCP GitHub functions instead of direct Git commands
+   - For CLI operations, use `gh` commands (see docs/github_cli_guide.md)
+   - For AI-assisted workflows, use MCP GitHub functions when available
+
+3. **Commit Standards**:
    - Write descriptive commit messages with prefixes (feat:, fix:, docs:, etc.)
    - Keep the first line under 50 characters
    - Add detailed descriptions for complex changes
 
-3. **Code Review Process**:
-   - Create Pull Requests to the develop branch
+4. **Code Review Process**:
+   - Create Pull Requests to the develop branch using GitHub CLI:
+     ```bash
+     gh pr create --base develop --title "feat: Brief description" --body "Detailed description"
+     ```
    - Ensure all tests pass before requesting review
    - Address review comments with additional commits
 
-4. **Merging**:
-   - Use non-fast-forward merges (--no-ff) to maintain a clear history
+5. **Merging**:
+   - Use non-fast-forward merges to maintain a clear history:
+     ```bash
+     gh pr merge --merge --delete-branch
+     ```
    - Merge to main only through release branches or hotfixes
    - Tag all production releases with version numbers
 
-For detailed information, refer to rebuild_plan/git_workflow.md.
+For detailed information, refer to rebuild_plan/git_workflow.md and docs/github_cli_guide.md.
 
 ## Import Guidelines
 - Import GTK modules first, then standard library, then app modules
