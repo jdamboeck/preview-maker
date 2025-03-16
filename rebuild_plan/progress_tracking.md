@@ -45,7 +45,7 @@ This document tracks the progress of the Preview Maker rebuild implementation. U
 | Manual Overlay Management | Completed | - | Implemented as ManualOverlayManager class with OverlayControlPanel |
 | User Controls | Completed | - | Added buttons for open, save, analyze, and settings |
 | Drag-and-Drop Support | Completed | - | Added support for dropping image files |
-| UI Tests | In Progress | - | Mock implementation needs fixes for GTK Application testing |
+| UI Tests | Completed | #17 | Fixed mock implementation for GTK Application testing in headless environments |
 
 ### Integration Layer
 | Component | Status | Pull Request | Notes |
