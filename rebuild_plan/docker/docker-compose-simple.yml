@@ -1,0 +1,12 @@
+version: '3'
+
+services:
+  gtk-test:
+    build:
+      context: .
+      dockerfile: Dockerfile.gtk-test
+    image: preview-maker:gtk-test
+    container_name: gtk-simple-test
+    volumes:
+      - ../..:/app
+    working_dir: /app
