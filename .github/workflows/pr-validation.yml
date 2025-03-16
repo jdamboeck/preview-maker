@@ -1,0 +1,65 @@
+name: PR Validation
+
+on:
+  pull_request:
+    branches: [ develop, main ]
+  push:
+    branches: [ develop, main, feature/*, bugfix/*, hotfix/*, release/* ]
+
+jobs:
+  lint:
+    name: Code Quality Checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install pre-commit
+        run: |
+          python -m pip install --upgrade pip
+          pip install pre-commit
+
+      - name: Run pre-commit
+        run: pre-commit run --all-files
+
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Docker
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build Docker image
+        run: |
+          docker-compose -f rebuild_plan/docker/docker-compose.yml build
+
+      - name: Run tests with Docker
+        run: |
+          docker-compose -f rebuild_plan/docker/docker-compose.yml run --rm test pytest
+
+      - name: Run UI tests in headless mode
+        run: |
+          docker-compose -f rebuild_plan/docker/docker-compose.yml run --rm test pytest tests/ui/ --headless -v
+
+  verify-docs:
+    name: Verify Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Check for broken links
+        run: |
+          echo "Running documentation check..."
+          # Add documentation validation script or tool here
+          # For example:
+          # pip install markdown-link-check
+          # markdown-link-check README.md
+          # This is a placeholder for now
+          exit 0

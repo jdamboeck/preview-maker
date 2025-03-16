@@ -1,0 +1,16 @@
+name: Branch Cleanup
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  delete_branch:
+    name: Delete Branch After Merge
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.merged == true && !startsWith(github.event.pull_request.head.ref, 'release/')
+    steps:
+      - name: Delete branch
+        uses: SvanBoxel/delete-merged-branch@main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

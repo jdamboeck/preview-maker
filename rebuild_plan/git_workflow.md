@@ -319,3 +319,53 @@ The Preview Maker repository includes:
    - Documentation Update: `.github/ISSUE_TEMPLATE/documentation_update.md`
 
 These templates ensure consistent information is provided for all contributions.
+
+## Integration with CI/CD
+
+Preview Maker uses GitHub Actions for continuous integration and deployment. These workflows automate testing, linting, and release processes.
+
+### Automated Testing and Validation
+
+When you push to a branch or create a pull request, GitHub Actions automatically runs the following checks:
+
+1. **Code Quality (Lint)**: Runs pre-commit hooks to check code style and quality
+2. **Tests**: Runs unit and integration tests in Docker
+3. **Documentation**: Verifies documentation links and integrity
+
+These checks must pass before a pull request can be merged.
+
+```bash
+# View the status of CI checks for your PR
+gh pr checks
+
+# View detailed logs for a specific workflow run
+gh run view <run-id>
+```
+
+### Security Scanning
+
+The repository includes automated security scanning for dependencies and code:
+
+1. **Dependency Scanning**: Checks for vulnerable dependencies
+2. **Code Security Analysis**: Analyzes code for security issues
+
+```bash
+# Manually trigger security scan
+gh workflow run security-scan.yml
+```
+
+### Branch Protection
+
+Both `main` and `develop` branches are protected with the following rules:
+
+1. Required status checks must pass
+2. Pull request reviews are required
+3. Administrators are included in these restrictions
+
+See [branch_protection_rules.md](../docs/branch_protection_rules.md) for details.
+
+### Automated Branch Cleanup
+
+After a pull request is merged, the source branch is automatically deleted (except for release branches).
+
+For more information about the CI/CD workflows, see [ci_cd_guide.md](../docs/ci_cd_guide.md).

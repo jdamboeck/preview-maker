@@ -113,6 +113,7 @@ We welcome contributions to Preview Maker! Please follow our Git workflow and co
 - **GitHub CLI**: For an enhanced workflow using GitHub CLI, see [github_cli_guide.md](docs/github_cli_guide.md).
 - **Templates**: We use standardized templates for issues and pull requests to ensure consistent information.
 - **Code Quality**: We use pre-commit hooks to maintain code quality standards.
+- **CI/CD**: Automated workflows check code quality, run tests, and scan for security issues on every PR. See [ci_cd_guide.md](docs/ci_cd_guide.md).
 
 ### Setting Up Development Environment
 
