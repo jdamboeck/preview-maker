@@ -104,3 +104,28 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - Google Gemini API for image analysis
 - GTK team for the UI toolkit
 - PyGObject team for Python bindings
+
+## Contributing
+
+We welcome contributions to Preview Maker! Please follow our Git workflow and contribution guidelines:
+
+- **Git Workflow**: See [git_workflow.md](rebuild_plan/git_workflow.md) for detailed information on our branching strategy, commit message standards, and merge process.
+- **GitHub CLI**: For an enhanced workflow using GitHub CLI, see [github_cli_guide.md](docs/github_cli_guide.md).
+- **Templates**: We use standardized templates for issues and pull requests to ensure consistent information.
+- **Code Quality**: We use pre-commit hooks to maintain code quality standards.
+
+### Setting Up Development Environment
+
+```bash
+# Clone the repository
+git clone https://github.com/jdamboeck/preview-maker.git
+cd preview-maker
+
+# Set up your environment
+docker-compose -f rebuild_plan/docker/docker-compose.yml build
+docker-compose -f rebuild_plan/docker/docker-compose.yml run --rm verify
+
+# Set up pre-commit hooks
+pip install pre-commit
+pre-commit install
+```

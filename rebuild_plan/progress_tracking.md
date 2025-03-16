@@ -100,7 +100,7 @@ This document tracks the progress of the Preview Maker rebuild implementation. U
 | Developer Guide | Not Started | - |
 | Architecture Overview | In Progress | Component dependency diagram implemented |
 | Installation Guide | Completed | Added to README.md |
-| Git Workflow | Completed | Added git_workflow.md with comprehensive workflow |
+| Git Workflow | Completed | Added git_workflow.md with comprehensive workflow, GitHub CLI guide, and PR/Issue templates |
 | Testing Guide | Completed | Added comprehensive Xwayland testing documentation, X11 forwarding guide, and testing integration documentation |
 
 ## Milestones
@@ -250,6 +250,7 @@ This document tracks the progress of the Preview Maker rebuild project. It's upd
 4. **Xwayland Testing Environment** - Set up a robust Xwayland-based testing environment for more reliable GTK UI tests in CI/CD pipelines.
 5. **Docker Environment Optimization** - Improved the Docker development environment for better support of GTK applications.
 6. **Mock Framework** - Created a comprehensive mock framework for GTK UI testing.
+7. **Enhanced Git Workflow** - Improved Git workflow documentation with GitHub CLI integration, added PR/Issue templates, and pre-commit configuration.
 
 ## Current Sprint Tasks
 
