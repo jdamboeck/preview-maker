@@ -1,3 +1,4 @@
+---
 name: Branch Cleanup
 
 on:
@@ -5,10 +6,12 @@ on:
     types: [closed]
 
 jobs:
-  delete_branch:
+  delete-branch:
     name: Delete Branch After Merge
     runs-on: ubuntu-latest
-    if: github.event.pull_request.merged == true && !startsWith(github.event.pull_request.head.ref, 'release/')
+    if: >
+      github.event.pull_request.merged == true &&
+      !startsWith(github.event.pull_request.head.ref, 'release/')
     steps:
       - name: Delete branch
         uses: SvanBoxel/delete-merged-branch@main

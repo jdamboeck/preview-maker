@@ -1,10 +1,17 @@
+---
 name: PR Validation
 
 on:
   pull_request:
-    branches: [ develop, main ]
+    branches: [develop, main]
   push:
-    branches: [ develop, main, feature/*, bugfix/*, hotfix/*, release/* ]
+    branches:
+      - develop
+      - main
+      - 'feature/**'
+      - 'bugfix/**'
+      - 'hotfix/**'
+      - 'release/**'
 
 jobs:
   lint:
@@ -24,7 +31,8 @@ jobs:
           pip install pre-commit
 
       - name: Run pre-commit
-        run: pre-commit run --all-files
+        run: |
+          pre-commit run --all-files
 
   test:
     name: Run Tests
@@ -42,11 +50,13 @@ jobs:
 
       - name: Run tests with Docker
         run: |
-          docker-compose -f rebuild_plan/docker/docker-compose.yml run --rm test pytest
+          docker-compose -f rebuild_plan/docker/docker-compose.yml \
+            run --rm test pytest
 
       - name: Run UI tests in headless mode
         run: |
-          docker-compose -f rebuild_plan/docker/docker-compose.yml run --rm test pytest tests/ui/ --headless -v
+          docker-compose -f rebuild_plan/docker/docker-compose.yml \
+            run --rm test pytest tests/ui/ --headless -v
 
   verify-docs:
     name: Verify Documentation
