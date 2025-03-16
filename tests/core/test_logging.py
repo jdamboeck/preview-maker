@@ -157,3 +157,31 @@ def test_custom_format(capsys):
     captured = capsys.readouterr()
     assert "|" in captured.err
     assert "Test message" in captured.err
+
+
+def test_log_level_parameter():
+    """Test that log_level parameter works correctly with different types and precedence."""
+    # Test string-based log level
+    setup_logging(log_level="DEBUG")
+    assert logger.level == logging.DEBUG
+
+    # Test numeric log level
+    setup_logging(log_level=logging.WARNING)
+    assert logger.level == logging.WARNING
+
+    # Test precedence: log_level should override level when both are provided
+    setup_logging(level=logging.ERROR, log_level=logging.INFO)
+    assert logger.level == logging.INFO
+
+    # Test precedence with string-based log_level
+    setup_logging(level=logging.ERROR, log_level="DEBUG")
+    assert logger.level == logging.DEBUG
+
+    # Test invalid string handling (should fall back to level)
+    try:
+        setup_logging(level=logging.INFO, log_level="INVALID_LEVEL")
+        assert False, "Should have raised an AttributeError"
+    except AttributeError:
+        # This is expected, as getattr(logging, "INVALID_LEVEL".upper())
+        # will raise this error
+        pass

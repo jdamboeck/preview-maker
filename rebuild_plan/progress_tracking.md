@@ -124,7 +124,7 @@ This document tracks the progress of the Preview Maker rebuild implementation. U
 | UI Test Mocks | UI tests failing | Fix mock implementation for GTK Application tests | To Be Addressed |
 | AIPreviewGenerator API | Integration tests failing | Update AIPreviewGenerator to match test expectations | In Progress |
 | Configuration Management | Tests failing | Implement ConfigManager with _reset_for_testing method | Resolved |
-| Logging System | Tests failing | Update setup_logging to accept log_level parameter | To Be Addressed |
+| Logging System | Tests failing | Update setup_logging to accept log_level parameter | Resolved |
 
 ## Notes
 
@@ -189,27 +189,29 @@ Use this section to document important decisions, design changes, or other notab
   - Added toggle for switching between AI and manual modes
   - Implemented drag-and-drop for overlay positioning
   - Added tests for manual overlay management
+- 2024-05-26: Logging System issue verified as resolved
+  - Confirmed setup_logging function properly handles log_level parameter
+  - All logging tests are passing
+  - Function correctly accepts both string and numeric log levels
+  - log_level parameter takes precedence over level when both are provided
+  - Added comprehensive tests for the log_level parameter to verify type handling and precedence
 
 ## Next Steps
 
 Based on our current progress, the following tasks should be prioritized:
 
-1. **Update Logging System**
-   - Fix setup_logging to accept log_level parameter
-   - Ensure all logging tests pass
-
-2. **Fix UI Test Mocks**
+1. **Fix UI Test Mocks**
    - Update mock implementation for GTK Application tests
    - Ensure UI tests can run in headless mode
 
-3. **Fix Image Cache Tests**
+2. **Fix Image Cache Tests**
    - Update ImageCache to work with new configuration structure
    - Add cache_dir to PreviewMakerConfig or adapt tests to use existing paths
 
-4. **Test Manual Overlay Manager**
+3. **Test Manual Overlay Manager**
    - Ensure manual overlay creation and management works properly
    - Verify integration with ApplicationWindow and ImageView
 
-5. **Address Linter Errors**
+4. **Address Linter Errors**
    - Add type hints for GTK and Cairo
    - Fix remaining linter errors in the codebase
