@@ -24,6 +24,11 @@ rebuild_plan/
 │   ├── docker_diagnostics.py # Diagnostic tool for Docker environment
 │   ├── verify_environment.py # Verification script for environment
 │   └── README.md            # Docker environment documentation
+├── testing/                 # Testing documentation and resources
+│   ├── xwayland_testing.md  # Xwayland testing guide
+│   ├── ui_testing_guide.md  # UI testing guide
+│   ├── headless_ui_testing.md # Headless UI testing guide
+│   └── 04_ui_testing.md     # UI testing strategy
 ├── gtk_overlay_test.py      # Test script for GTK 4.0 with Pillow and Cairo
 ├── cursor_readme.md         # Cursor IDE setup instructions
 └── README.md                # This file
@@ -71,6 +76,19 @@ The Docker environment provides a consistent development experience across diffe
 3. **Development Tools**: Python debugging tools, linters, and test frameworks
 4. **Diagnostic Tools**: For troubleshooting environment issues
 
+## Testing Approach
+
+Preview Maker supports three approaches for UI testing:
+
+1. **Mock-based Testing**: Fast, lightweight tests using mock GTK components
+2. **X11 Forwarding**: Testing with real GTK components using host X11 server
+3. **Xwayland Testing**: Self-contained testing with a complete Xwayland environment
+
+For detailed information on testing approaches, see:
+- [UI Testing Guide](testing/ui_testing_guide.md): Comprehensive guide for all UI testing approaches
+- [Xwayland Testing](testing/xwayland_testing.md): Detailed guide for Xwayland testing
+- [Headless UI Testing](testing/headless_ui_testing.md): Guide for headless UI testing with mocks
+
 ## Getting Started
 
 1. **Clone the Repository**:
@@ -94,9 +112,13 @@ The Docker environment provides a consistent development experience across diffe
    docker-compose -f rebuild_plan/docker/docker-compose.yml run --rm preview-maker dev
    ```
 
-5. **Run GTK Overlay Test**:
+5. **Run UI Tests**:
    ```bash
-   docker-compose -f rebuild_plan/docker/docker-compose.yml run --rm gtk-test
+   # Run mock-based tests
+   docker-compose -f rebuild_plan/docker/docker-compose.yml run --rm test pytest tests/ui/ --headless -v
+
+   # Run Xwayland tests
+   ./rebuild_plan/docker/run_gtk_tests.sh --test tests/ui/test_xwayland.py
    ```
 
 ## Next Steps
