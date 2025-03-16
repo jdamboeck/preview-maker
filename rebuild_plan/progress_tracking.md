@@ -88,6 +88,8 @@ This document tracks the progress of the Preview Maker rebuild implementation. U
 | Image Display | Completed | Tests for image view widget |
 | User Controls | Completed | Tests for buttons and controls |
 | Drag and Drop | Completed | Tests for drag and drop functionality |
+| Xwayland Testing | Completed | Implemented robust Xwayland testing with Xvfb for GTK UI components |
+| Overlay Controls | Completed | Tests for overlay control panel functionality |
 
 ## Documentation Progress
 
@@ -98,7 +100,8 @@ This document tracks the progress of the Preview Maker rebuild implementation. U
 | Developer Guide | Not Started | - |
 | Architecture Overview | In Progress | Component dependency diagram implemented |
 | Installation Guide | Completed | Added to README.md |
-| Git Workflow | Completed | Added git_workflow.md with comprehensive workflow |
+| Git Workflow | Completed | Added git_workflow.md with comprehensive workflow, GitHub CLI guide, PR/Issue templates, and branch protection documentation |
+| Testing Guide | Completed | Added comprehensive Xwayland testing documentation, X11 forwarding guide, and testing integration documentation |
 
 ## Milestones
 
@@ -195,6 +198,12 @@ Use this section to document important decisions, design changes, or other notab
   - Function correctly accepts both string and numeric log levels
   - log_level parameter takes precedence over level when both are provided
   - Added comprehensive tests for the log_level parameter to verify type handling and precedence
+- 2024-05-27: GTK UI Testing Framework implemented
+  - Added robust Xwayland testing environment for GTK UI components
+  - Implemented comprehensive tests for overlay controls
+  - Created reusable GTKTestBase class for UI testing
+  - Added support for both headless and interactive testing modes
+  - Documented testing approach in testing guide
 
 ## Next Steps
 
