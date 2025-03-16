@@ -100,7 +100,7 @@ This document tracks the progress of the Preview Maker rebuild implementation. U
 | Developer Guide | Not Started | - |
 | Architecture Overview | In Progress | Component dependency diagram implemented |
 | Installation Guide | Completed | Added to README.md |
-| Git Workflow | Completed | Added git_workflow.md with comprehensive workflow |
+| Git Workflow | Completed | Added git_workflow.md with comprehensive workflow, GitHub CLI guide, PR/Issue templates, and branch protection documentation |
 | Testing Guide | Completed | Added comprehensive Xwayland testing documentation, X11 forwarding guide, and testing integration documentation |
 
 ## Milestones
