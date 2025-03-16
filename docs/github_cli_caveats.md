@@ -1,6 +1,15 @@
-# GitHub CLI API Caveats and Solutions
+# GitHub CLI Caveats and Solutions
 
-This document outlines common issues encountered when using GitHub CLI API for Git operations and provides tested solutions.
+This document outlines common issues encountered when using GitHub CLI for automation and provides tested solutions.
+
+## Key Issues with GitHub CLI Automation
+
+When using GitHub CLI for automation or in non-interactive contexts, you may encounter these challenges:
+
+1. **Multi-line commands don't work as expected**
+2. **Content with special characters requires proper escaping**
+3. **Auth tokens need proper handling**
+4. **Error handling is limited in non-interactive mode**
 
 ## Command Limitations
 
@@ -38,33 +47,202 @@ echo -n "# Complex content with 'quotes' and \"double quotes\"" | base64 -w0 > /
 gh api repos/owner/repo/contents/path -X PUT -f message="message" -f content="$(cat /tmp/content.txt)" -f branch="branch"
 ```
 
+## Solutions for Common Issues
+
+### Working with Multi-line Content
+
+When creating files or PRs with multi-line content, direct commands often fail. Here are effective workarounds:
+
+#### Solution 1: Use Temporary Files
+
+```bash
+# Create content in a temporary file
+cat > /tmp/content.txt << 'EOF'
+# This is a multi-line file
+with code examples and special characters like:
+* Lists
+* "Quotes"
+* $Variables
+EOF
+
+# Base64 encode the content
+base64 -w0 /tmp/content.txt > /tmp/encoded.txt
+
+# Create the file using the encoded content
+gh api repos/jdamboeck/preview-maker/contents/path/to/file.md -X PUT \
+  -f message="Add documentation file" \
+  -f content="$(cat /tmp/encoded.txt)" \
+  -f branch="feature/branch-name" | cat
+```
+
+#### Solution 2: Echo With Base64 Encoding
+
+```bash
+# For smaller content, use echo with new lines escaped
+echo -n "# Title\n\nThis is a paragraph.\n\n* List item 1\n* List item 2" | base64 -w0 > /tmp/content.txt
+gh api repos/jdamboeck/preview-maker/contents/README.md -X PUT \
+  -f message="Update README" \
+  -f content="$(cat /tmp/content.txt)" \
+  -f branch="feature/branch-name" | cat
+```
+
+### Creating Pull Requests with Detailed Descriptions
+
+For PRs with detailed descriptions that include formatting:
+
+```bash
+# Write PR description to a file
+cat > /tmp/pr_description.txt << 'EOF'
+This PR adds the following features:
+
+- Feature 1: Description with details
+- Feature 2: Another description
+
+## Testing Done
+- Unit tests all pass
+- Integration tests completed
+
+Fixes #123
+EOF
+
+# Create the PR using the file content
+gh api repos/jdamboeck/preview-maker/pulls -f title="feat: Add new feature" \
+  -f body="$(cat /tmp/pr_description.txt)" \
+  -f head="feature/branch-name" \
+  -f base="develop" | cat
+```
+
 ## Helper Script Approach
 
-For complex operations, use a Python helper script that generates commands:
+For complex operations, you can use either a Bash or Python helper script to generate commands:
+
+### Bash Helper Functions
+
+```bash
+#!/bin/bash
+# File: scripts/github_cli_workflow_helpers.sh
+
+# Create a branch
+create_branch() {
+  local owner=$1
+  local repo=$2
+  local branch=$3
+  local base_branch=${4:-"develop"}
+  
+  head_sha=$(gh api repos/$owner/$repo/git/refs/heads/$base_branch --jq '.object.sha')
+  gh api repos/$owner/$repo/git/refs -f ref="refs/heads/$branch" \
+    -f sha="$head_sha" | cat
+  
+  echo "Branch '$branch' created from '$base_branch'"
+}
+
+# Create a file with content
+create_file() {
+  local owner=$1
+  local repo=$2
+  local path=$3
+  local content=$4
+  local branch=$5
+  local message=${6:-"Add $path"}
+  
+  echo -n "$content" | base64 -w0 > /tmp/gh_content.txt
+  gh api repos/$owner/$repo/contents/$path -X PUT \
+    -f message="$message" \
+    -f content="$(cat /tmp/gh_content.txt)" \
+    -f branch="$branch" | cat
+  
+  echo "File '$path' created in branch '$branch'"
+}
+
+# Create a pull request
+create_pr() {
+  local owner=$1
+  local repo=$2
+  local title=$3
+  local body=$4
+  local head=$5
+  local base=${6:-"develop"}
+  
+  echo "$body" > /tmp/gh_pr_body.txt
+  gh api repos/$owner/$repo/pulls -f title="$title" \
+    -f body="$(cat /tmp/gh_pr_body.txt)" \
+    -f head="$head" \
+    -f base="$base" | cat
+  
+  echo "Pull request created from '$head' to '$base'"
+}
+```
+
+### Python Helper Script
 
 ```python
+#!/usr/bin/env python3
+# File: scripts/github_cli_helpers.py
+
+import base64
+import subprocess
 import json
+import os
+from typing import List, Dict, Optional, Any
 
-# Create a feature branch with GitHub CLI API
-def create_branch(owner, repo, branch, from_branch="develop"):
-    """Create a new branch non-interactively."""
-    head_sha = f"$(gh api repos/{owner}/{repo}/git/refs/heads/{from_branch} --jq '.object.sha')"
-    command = f"gh api repos/{owner}/{repo}/git/refs -f ref='refs/heads/{branch}' -f sha='{head_sha}'"
-    print(f"Command to run: {command}")
+def create_branch_command(owner: str, repo: str, branch: str, base_branch: str = "develop") -> str:
+    """Generate command to create a new branch."""
+    return (
+        f"head_sha=$(gh api repos/{owner}/{repo}/git/refs/heads/{base_branch} --jq '.object.sha') && "
+        f"gh api repos/{owner}/{repo}/git/refs -f ref=\"refs/heads/{branch}\" -f sha=\"$head_sha\" | cat"
+    )
 
-# Create a file with GitHub CLI API  
-def create_file(owner, repo, path, content, branch, message):
-    """Create a file non-interactively."""
-    content_b64 = "$(echo -n '" + content.replace("'", "'\\'") + "' | base64 -w0)"
-    command = f"gh api repos/{owner}/{repo}/contents/{path} -X PUT -f message='{message}' -f content='{content_b64}' -f branch='{branch}'"
-    print(f"Command to run: {command}")
+def create_file_command(
+    owner: str, 
+    repo: str, 
+    path: str, 
+    content: str, 
+    branch: str, 
+    message: str = None
+) -> str:
+    """Generate command to create a file with content."""
+    if message is None:
+        message = f"Add {path}"
+    
+    # Create a temporary file name
+    tmp_file = f"/tmp/gh_content_{os.path.basename(path)}.b64"
+    
+    # Create the command with proper escaping
+    commands = [
+        f"echo -n '{content.replace(\"'\", \"'\\''\")}' | base64 -w0 > {tmp_file}",
+        f"gh api repos/{owner}/{repo}/contents/{path} -X PUT "
+        f"-f message='{message.replace(\"'\", \"'\\''\")}' "
+        f"-f content=\"$(cat {tmp_file})\" "
+        f"-f branch='{branch}' | cat",
+        f"rm {tmp_file}"
+    ]
+    
+    return " && ".join(commands)
 
-# Create a pull request with GitHub CLI API
-def create_pr(owner, repo, title, body, head, base="develop"):
-    """Create a PR non-interactively."""
-    body_escaped = json.dumps(body)
-    command = f"gh api repos/{owner}/{repo}/pulls -f title='{title}' -f body={body_escaped} -f head='{head}' -f base='{base}'"
-    print(f"Command to run: {command}")
+def create_pr_command(
+    owner: str, 
+    repo: str, 
+    title: str, 
+    body: str, 
+    head: str, 
+    base: str = "develop"
+) -> str:
+    """Generate command to create a pull request."""
+    # Create a temporary file name
+    tmp_file = f"/tmp/gh_pr_body_{head.replace('/', '_')}.txt"
+    
+    # Create the command with proper escaping
+    commands = [
+        f"cat > {tmp_file} << 'EOFGH'\n{body}\nEOFGH",
+        f"gh api repos/{owner}/{repo}/pulls "
+        f"-f title='{title.replace(\"'\", \"'\\''\")}' "
+        f"-f body=\"$(cat {tmp_file})\" "
+        f"-f head='{head}' "
+        f"-f base='{base}' | cat",
+        f"rm {tmp_file}"
+    ]
+    
+    return " && ".join(commands)
 ```
 
 ## Multiple Files in One Commit
@@ -107,12 +285,15 @@ gh api repos/jdamboeck/preview-maker/pulls -f title="feat: Add feature" \
 
 Issue templates work correctly when manually structured in the body content.
 
-## Recommendations
+## Important Recommendations
 
-1. **Use MCP functions** as the first and preferred choice whenever available
-2. For GitHub CLI API operations:
-   - Use single-line commands with escaped newlines
-   - Use temp files for complex content
-   - Consider helper scripts for complex operations
-3. Always test commands before documenting them
-4. When in doubt, use the MCP approach
+1. **Always append `| cat` to commands** that might launch a pager
+2. **Store complex content in temporary files** rather than passing directly
+3. **Use the helper scripts** provided in this document for common operations
+4. **Prefer MCP functions over GitHub CLI** whenever available
+5. **Test commands in a safe environment** before using in production workflows
+6. **For truly complex operations**, consider using the GitHub API directly with proper HTTP clients
+7. **Use single-line commands with escaped newlines** when necessary
+8. **Consider helper scripts for complex operations** to make commands more maintainable
+
+By following these guidelines, you can reliably automate GitHub operations while avoiding common pitfalls with the GitHub CLI.

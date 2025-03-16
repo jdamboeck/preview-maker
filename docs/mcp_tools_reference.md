@@ -1,191 +1,333 @@
-# MCP Tools Reference
+# MCP Tools Reference: GitHub Functions
 
-This document provides a reference for all Model Control Protocol (MCP) tools available for the Preview Maker project. These tools can be used by AI assistants to interact with the development environment, GitHub repository, filesystem, and external resources.
+This document provides a comprehensive reference for the MCP GitHub tool functions available for Preview Maker development.
 
-## GitHub MCP Tools
+## Introduction
 
-These tools allow interaction with GitHub without using direct Git commands.
+MCP GitHub functions are the preferred method for interacting with GitHub as they provide a clean, programmatic interface that eliminates common issues with command-line tools. These functions handle authentication, content encoding, and other complex aspects automatically.
+
+## Available MCP GitHub Functions
 
 ### Repository Management
 
-| Tool | Description | Key Parameters |
-|------|-------------|----------------|
-| `mcp_github_create_repository` | Create a new GitHub repository | `name`, `description`, `private` |
-| `mcp_github_fork_repository` | Fork a repository to your account | `owner`, `repo`, `organization` (optional) |
-| `mcp_github_search_repositories` | Search for GitHub repositories | `query`, `page`, `perPage` |
+#### `mcp_github_create_repository`
 
-### Branch and Commit Management
-
-| Tool | Description | Key Parameters |
-|------|-------------|----------------|
-| `mcp_github_create_branch` | Create a new branch | `owner`, `repo`, `branch`, `from_branch` (optional) |
-| `mcp_github_list_commits` | List commits on a branch | `owner`, `repo`, `sha` (branch/tag), `page`, `perPage` |
-
-### File Operations
-
-| Tool | Description | Key Parameters |
-|------|-------------|----------------|
-| `mcp_github_create_or_update_file` | Create or update a single file | `owner`, `repo`, `path`, `content`, `message`, `branch`, `sha` (for updates) |
-| `mcp_github_get_file_contents` | Get file or directory contents | `owner`, `repo`, `path`, `branch` (optional) |
-| `mcp_github_push_files` | Push multiple files in one commit | `owner`, `repo`, `branch`, `files` (array of path/content objects), `message` |
-
-### Issue and PR Management
-
-| Tool | Description | Key Parameters |
-|------|-------------|----------------|
-| `mcp_github_create_issue` | Create a new issue | `owner`, `repo`, `title`, `body`, `labels` (optional) |
-| `mcp_github_get_issue` | Get issue details | `owner`, `repo`, `issue_number` |
-| `mcp_github_list_issues` | List repository issues | `owner`, `repo`, `state`, `labels`, `sort`, etc. |
-| `mcp_github_update_issue` | Update an existing issue | `owner`, `repo`, `issue_number`, plus fields to update |
-| `mcp_github_add_issue_comment` | Comment on an issue | `owner`, `repo`, `issue_number`, `body` |
-| `mcp_github_create_pull_request` | Create a pull request | `owner`, `repo`, `title`, `head`, `base`, `body` |
-
-### Search Operations
-
-| Tool | Description | Key Parameters |
-|------|-------------|----------------|
-| `mcp_github_search_code` | Search code across repositories | `q` (query), `page`, `per_page`, etc. |
-| `mcp_github_search_issues` | Search issues and PRs | `q` (query), `sort`, `order`, etc. |
-| `mcp_github_search_users` | Search GitHub users | `q` (query), `sort`, `order`, etc. |
-
-## Docker MCP Tools
-
-These tools allow interaction with Docker containers and services.
-
-| Tool | Description | Key Parameters |
-|------|-------------|----------------|
-| `mcp_docker_create_container` | Create a new Docker container | `image`, `name` (optional), `environment`, `ports` |
-| `mcp_docker_deploy_compose` | Deploy a Docker Compose stack | `compose_yaml`, `project_name` |
-| `mcp_docker_get_logs` | Get logs from a container | `container_name` |
-| `mcp_docker_list_containers` | List all Docker containers | - |
-
-## Filesystem MCP Tools
-
-These tools provide access to the filesystem within allowed directories.
-
-### Basic File Operations
-
-| Tool | Description | Key Parameters |
-|------|-------------|----------------|
-| `mcp_filesystem_read_file` | Read file contents | `path` |
-| `mcp_filesystem_write_file` | Create or overwrite a file | `path`, `content` |
-| `mcp_filesystem_edit_file` | Make line-based edits to a file | `path`, `edits` (array of oldText/newText pairs), `dryRun` (optional) |
-| `mcp_filesystem_move_file` | Move or rename files | `source`, `destination` |
-| `mcp_filesystem_read_multiple_files` | Read multiple files at once | `paths` (array of paths) |
-
-### Directory Operations
-
-| Tool | Description | Key Parameters |
-|------|-------------|----------------|
-| `mcp_filesystem_create_directory` | Create a directory | `path` |
-| `mcp_filesystem_list_directory` | List directory contents | `path` |
-| `mcp_filesystem_directory_tree` | Get recursive directory structure | `path` |
-| `mcp_filesystem_list_allowed_directories` | List allowed directories | - |
-
-### Search and Info
-
-| Tool | Description | Key Parameters |
-|------|-------------|----------------|
-| `mcp_filesystem_search_files` | Search for files matching pattern | `path`, `pattern`, `excludePatterns` (optional) |
-| `mcp_filesystem_get_file_info` | Get metadata about a file | `path` |
-
-## Web Access Tools
-
-| Tool | Description | Key Parameters |
-|------|-------------|----------------|
-| `mcp_fetch_fetch` | Fetch content from a URL | `url`, `max_length` (optional), `raw` (optional), `start_index` (optional) |
-
-## Usage Examples
-
-### Creating a Branch and Adding Files
+Creates a new GitHub repository in your account.
 
 ```javascript
-// Create a new branch
+mcp_github_create_repository({
+  name: "my-new-repo",
+  description: "A new repository for my project",
+  private: true,
+  autoInit: true
+});
+```
+
+#### `mcp_github_fork_repository`
+
+Forks a GitHub repository to your account or specified organization.
+
+```javascript
+mcp_github_fork_repository({
+  owner: "jdamboeck",
+  repo: "preview-maker",
+  organization: "my-organization" // Optional
+});
+```
+
+### Branch Management
+
+#### `mcp_github_create_branch`
+
+Creates a new branch in a GitHub repository.
+
+```javascript
 mcp_github_create_branch({
   owner: "jdamboeck",
   repo: "preview-maker",
-  branch: "feature/new-component",
-  from_branch: "develop"
+  branch: "feature/new-feature",
+  from_branch: "develop" // Optional, defaults to the repository's default branch
 });
+```
 
-// Add files to the branch
+### File Operations
+
+#### `mcp_github_get_file_contents`
+
+Gets the contents of a file or directory from a GitHub repository.
+
+```javascript
+mcp_github_get_file_contents({
+  owner: "jdamboeck",
+  repo: "preview-maker",
+  path: "README.md",
+  branch: "develop" // Optional
+});
+```
+
+#### `mcp_github_create_or_update_file`
+
+Creates or updates a single file in a GitHub repository.
+
+```javascript
+mcp_github_create_or_update_file({
+  owner: "jdamboeck",
+  repo: "preview-maker",
+  path: "docs/new-doc.md",
+  content: "# New Documentation\n\nThis is a new document.",
+  message: "docs: Add new documentation",
+  branch: "feature/new-docs",
+  sha: "abc123def456" // Required only when updating existing files
+});
+```
+
+#### `mcp_github_push_files`
+
+Pushes multiple files to a GitHub repository in a single commit.
+
+```javascript
 mcp_github_push_files({
   owner: "jdamboeck",
   repo: "preview-maker",
-  branch: "feature/new-component",
-  message: "feat: Add new component implementation",
+  branch: "feature/new-feature",
+  message: "feat: Add new components",
   files: [
     {
       path: "app/components/new_component.py",
-      content: "# New component implementation\n\nclass NewComponent:\n    def __init__(self):\n        pass"
+      content: "class NewComponent:\n    def __init__(self):\n        pass"
     },
     {
-      path: "tests/components/test_new_component.py",
-      content: "# Tests for new component\n\nimport pytest\n\ndef test_new_component():\n    assert True"
+      path: "tests/test_new_component.py",
+      content: "import unittest\n\ndef test_new_component():\n    pass"
     }
   ]
 });
 ```
 
-### Creating a Pull Request
+### Pull Request Management
+
+#### `mcp_github_create_pull_request`
+
+Creates a new pull request in a GitHub repository.
 
 ```javascript
 mcp_github_create_pull_request({
   owner: "jdamboeck",
   repo: "preview-maker",
-  title: "feat: Add new component implementation",
-  body: "This PR adds the new component with tests.\n\nCloses #42",
-  head: "feature/new-component",
+  title: "feat: Add new feature",
+  body: "This PR adds a new feature that does X, Y, and Z.",
+  head: "feature/new-feature",
+  base: "develop",
+  draft: false, // Optional
+  maintainer_can_modify: true // Optional
+});
+```
+
+### Issue Management
+
+#### `mcp_github_create_issue`
+
+Creates a new issue in a GitHub repository.
+
+```javascript
+mcp_github_create_issue({
+  owner: "jdamboeck",
+  repo: "preview-maker",
+  title: "bug: Application crashes on startup",
+  body: "When starting the application with X configuration, it crashes with error Y.",
+  labels: ["bug", "priority-high"],
+  assignees: ["username"], // Optional
+  milestone: 1 // Optional
+});
+```
+
+#### `mcp_github_update_issue`
+
+Updates an existing issue in a GitHub repository.
+
+```javascript
+mcp_github_update_issue({
+  owner: "jdamboeck",
+  repo: "preview-maker",
+  issue_number: 123,
+  title: "Updated issue title", // Optional
+  body: "Updated issue description", // Optional
+  state: "closed", // Optional: "open" or "closed"
+  labels: ["bug", "wontfix"], // Optional
+  assignees: ["username"], // Optional
+  milestone: 2 // Optional
+});
+```
+
+#### `mcp_github_add_issue_comment`
+
+Adds a comment to an existing issue.
+
+```javascript
+mcp_github_add_issue_comment({
+  owner: "jdamboeck",
+  repo: "preview-maker",
+  issue_number: 123,
+  body: "I've investigated this issue and found that it's related to X."
+});
+```
+
+### Search Functions
+
+#### `mcp_github_search_repositories`
+
+Searches for GitHub repositories.
+
+```javascript
+mcp_github_search_repositories({
+  query: "language:python preview",
+  page: 1, // Optional
+  perPage: 30 // Optional
+});
+```
+
+#### `mcp_github_search_code`
+
+Searches for code across GitHub repositories.
+
+```javascript
+mcp_github_search_code({
+  q: "class ImageProcessor repo:jdamboeck/preview-maker",
+  order: "desc", // Optional: "asc" or "desc"
+  page: 1, // Optional
+  per_page: 10 // Optional
+});
+```
+
+#### `mcp_github_search_issues`
+
+Searches for issues and pull requests across GitHub repositories.
+
+```javascript
+mcp_github_search_issues({
+  q: "is:open is:issue label:bug repo:jdamboeck/preview-maker",
+  sort: "created", // Optional
+  order: "desc", // Optional: "asc" or "desc"
+  page: 1, // Optional
+  per_page: 10 // Optional
+});
+```
+
+#### `mcp_github_search_users`
+
+Searches for users on GitHub.
+
+```javascript
+mcp_github_search_users({
+  q: "location:berlin",
+  sort: "followers", // Optional
+  order: "desc", // Optional: "asc" or "desc"
+  page: 1, // Optional
+  per_page: 10 // Optional
+});
+```
+
+### Commit Information
+
+#### `mcp_github_list_commits`
+
+Gets list of commits of a branch in a GitHub repository.
+
+```javascript
+mcp_github_list_commits({
+  owner: "jdamboeck",
+  repo: "preview-maker",
+  sha: "develop", // Optional: branch name or commit SHA
+  page: 1, // Optional
+  perPage: 30 // Optional
+});
+```
+
+## Best Practices for MCP Functions
+
+1. **Always use MCP functions first** when available instead of GitHub CLI commands
+2. **Use atomic operations** like `push_files` to update multiple files in one commit
+3. **Take advantage of error handling** provided by the MCP environment
+4. **Document MCP function usage** in PR descriptions for clarity
+5. **Create helper functions** for common sequences of MCP operations
+
+## Common Patterns
+
+### Feature Development Workflow
+
+```javascript
+// 1. Create a feature branch
+mcp_github_create_branch({
+  owner: "jdamboeck",
+  repo: "preview-maker",
+  branch: "feature/new-feature",
+  from_branch: "develop"
+});
+
+// 2. Add multiple files in a single commit
+mcp_github_push_files({
+  owner: "jdamboeck",
+  repo: "preview-maker",
+  branch: "feature/new-feature",
+  message: "feat: Implement new feature",
+  files: [
+    { path: "file1.py", content: "content1" },
+    { path: "file2.py", content: "content2" }
+  ]
+});
+
+// 3. Create a pull request
+mcp_github_create_pull_request({
+  owner: "jdamboeck",
+  repo: "preview-maker",
+  title: "feat: Add new feature",
+  body: "This PR implements the new feature as described in issue #123.",
+  head: "feature/new-feature",
   base: "develop"
 });
 ```
 
-### Working with Docker
+### Bug Fix Workflow
 
 ```javascript
-// List all containers
-mcp_docker_list_containers({
-  random_string: "any_value"
+// 1. Create issue for the bug
+mcp_github_create_issue({
+  owner: "jdamboeck",
+  repo: "preview-maker",
+  title: "bug: Application crashes when processing large images",
+  body: "When processing images larger than 4000x4000 pixels, the application crashes with an out of memory error.",
+  labels: ["bug", "priority-high"]
 });
 
-// Get logs from a container
-mcp_docker_get_logs({
-  container_name: "preview-maker-test-1"
+// 2. Create bugfix branch
+mcp_github_create_branch({
+  owner: "jdamboeck",
+  repo: "preview-maker",
+  branch: "bugfix/large-image-crash",
+  from_branch: "develop"
+});
+
+// 3. Fix the bug in the relevant file
+mcp_github_create_or_update_file({
+  owner: "jdamboeck",
+  repo: "preview-maker",
+  path: "app/components/image_processor.py",
+  content: "# Updated implementation with fix",
+  message: "fix: Handle large images without crashing",
+  branch: "bugfix/large-image-crash"
+});
+
+// 4. Create PR that references the issue
+mcp_github_create_pull_request({
+  owner: "jdamboeck",
+  repo: "preview-maker",
+  title: "fix: Handle large images without crashing",
+  body: "This PR fixes the out of memory error when processing large images.\n\nFixes #123",
+  head: "bugfix/large-image-crash",
+  base: "develop"
 });
 ```
 
-### File Operations
+## Fallback to GitHub CLI
 
-```javascript
-// Create a directory
-mcp_filesystem_create_directory({
-  path: "/home/jd/dev/projects/preview-maker/app/new_module"
-});
-
-// Write a file
-mcp_filesystem_write_file({
-  path: "/home/jd/dev/projects/preview-maker/app/new_module/component.py",
-  content: "# New component implementation\n\nclass NewComponent:\n    def __init__(self):\n        pass"
-});
-
-// Search for files
-mcp_filesystem_search_files({
-  path: "/home/jd/dev/projects/preview-maker",
-  pattern: "test_*.py",
-  excludePatterns: ["__pycache__"]
-});
-```
-
-## Best Practices
-
-1. **Prefer MCP Tools**: Use MCP tools instead of direct terminal commands when possible
-2. **Error Handling**: Always check for errors in the response
-3. **Atomicity**: For GitHub operations, try to use atomic operations (like `push_files` for multiple files)
-4. **Permissions**: Be aware of allowed directories for filesystem operations
-5. **Documentation**: Document any MCP tool usage in commit messages or PR descriptions
-
-## Limitations
-
-1. MCP tools only work within allowed directories
-2. Some advanced Git operations may still require GitHub CLI
-3. For complex Docker operations, you may need to use Docker CLI through terminal commands
+In cases where an MCP function is not available, refer to the [GitHub CLI Guide](github_cli_guide.md) and [GitHub CLI Caveats](github_cli_caveats.md) for alternative approaches using non-interactive GitHub CLI commands.
