@@ -70,7 +70,7 @@ This document tracks the progress of the Preview Maker rebuild implementation. U
 | Configuration Management | ~100% | Completed | All tests passing |
 | Image Processing | ~100% | Completed | All tests now passing |
 | AI Integration | ~85% | In Progress | ResponseParser and ImageAnalyzer tests passing, integration tests partially passing |
-| UI Components | ~70% | In Progress | Mock-based testing not working with GTK component initialization |
+| UI Components | ~100% | Completed | All tests passing with improved GTK mocking using system-wide module patching |
 | Event System | ~100% | Completed | All tests passing, including thread safety and async operation tests |
 
 ### Integration Tests
@@ -84,7 +84,7 @@ This document tracks the progress of the Preview Maker rebuild implementation. U
 ### UI Tests
 | Test Area | Status | Notes |
 |-----------|--------|-------|
-| Main Window | In Progress | Tests failing due to GTK mock types |
+| Main Window | Completed | Tests for the ApplicationWindow class working in both normal and headless environments |
 | Image Display | Completed | Tests for image view widget |
 | User Controls | Completed | Tests for buttons and controls |
 | Drag and Drop | Completed | Tests for drag and drop functionality |
@@ -121,7 +121,7 @@ This document tracks the progress of the Preview Maker rebuild implementation. U
 | GTK 4.0 Type Hints | Linter errors for GTK types | Add stub files or type comments | To Be Addressed |
 | Cairo Integration | Linter errors for Cairo types | Fix import issues and add proper type hints | To Be Addressed |
 | API Mismatches | Test failures | Update implementations to match test expectations | In Progress |
-| UI Test Mocks | UI tests failing | Fix mock implementation for GTK Application tests | To Be Addressed |
+| UI Test Mocks | UI tests failing | Fix mock implementation for GTK Application tests | Resolved (PRs #17, #20) |
 | AIPreviewGenerator API | Integration tests failing | Update AIPreviewGenerator to match test expectations | In Progress |
 | Configuration Management | Tests failing | Implement ConfigManager with _reset_for_testing method | Resolved |
 | Logging System | Tests failing | Update setup_logging to accept log_level parameter | Resolved |
