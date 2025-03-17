@@ -75,12 +75,13 @@ class ManualOverlayManager(OverlayManager):
         drag_controller.connect("drag-end", self._on_drag_end)
         self.image_view.add_controller(drag_controller)
 
-    def create_overlay_at(self, x: int, y: int) -> str:
+    def create_overlay_at(self, x: int, y: int, radius: Optional[int] = None) -> str:
         """Create a new overlay at the specified position.
 
         Args:
             x: X-coordinate center of the overlay
             y: Y-coordinate center of the overlay
+            radius: Optional radius for the overlay (uses default_radius if not provided)
 
         Returns:
             ID of the created overlay
@@ -88,10 +89,11 @@ class ManualOverlayManager(OverlayManager):
         # Generate a unique ID for the overlay
         overlay_id = str(uuid.uuid4())
 
+        # Use provided radius or default
+        overlay_radius = radius if radius is not None else self.default_radius
+
         # Add the overlay
-        success = self.add_overlay(
-            overlay_id, x, y, self.default_radius, self.default_color
-        )
+        success = self.add_overlay(overlay_id, x, y, overlay_radius, self.default_color)
 
         if success:
             # Select the new overlay
@@ -135,8 +137,19 @@ class ManualOverlayManager(OverlayManager):
 
         return (self.selected_overlay_id, self.overlays[self.selected_overlay_id])
 
+    def get_overlay_count(self) -> int:
+        """Get the number of overlays currently managed.
+
+        Returns:
+            The number of overlays
+        """
+        return len(self.overlays)
+
     def update_selected_overlay(
-        self, x: int = None, y: int = None, radius: int = None
+        self,
+        x: Optional[int] = None,
+        y: Optional[int] = None,
+        radius: Optional[int] = None,
     ) -> bool:
         """Update the position or size of the selected overlay.
 
@@ -369,9 +382,31 @@ class ManualOverlayManager(OverlayManager):
                 "#00ff00" if overlay_id == self.selected_overlay_id else color
             )
 
+            # Convert hex color to RGBA tuple
+            if overlay_color.startswith("#"):
+                # Parse hex color: #RRGGBB or #RRGGBBAA
+                hex_color = overlay_color.lstrip("#")
+                if len(hex_color) == 6:  # No alpha, assume fully opaque
+                    r = int(hex_color[0:2], 16)
+                    g = int(hex_color[2:4], 16)
+                    b = int(hex_color[4:6], 16)
+                    rgba_color = (r, g, b, 255)  # Fully opaque
+                elif len(hex_color) == 8:  # With alpha
+                    r = int(hex_color[0:2], 16)
+                    g = int(hex_color[2:4], 16)
+                    b = int(hex_color[4:6], 16)
+                    a = int(hex_color[6:8], 16)
+                    rgba_color = (r, g, b, a)
+                else:
+                    # Invalid hex, use red as fallback
+                    rgba_color = (255, 0, 0, 255)
+            else:
+                # Not a hex color, use red as fallback
+                rgba_color = (255, 0, 0, 255)
+
             # Create circular overlay
             overlay = self.image_processor.create_circular_overlay(
-                (image.width, image.height), (x, y), radius, overlay_color
+                (image.width, image.height), (x, y), radius, rgba_color
             )
 
             # Composite the overlay onto the image

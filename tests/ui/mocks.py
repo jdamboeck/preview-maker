@@ -106,70 +106,107 @@ class MockGtk:
         """Mock for Gtk.Button."""
 
         def __init__(self, label=None):
+            """Initialize Button with optional label."""
             self.label = label
+            self.handlers = {}
             self.parent = None
             self.css_classes = []
-            self.handlers = {}
 
         def set_label(self, label):
-            """Mock for set_label method."""
+            """Set button label."""
             self.label = label
 
         def get_label(self):
-            """Mock for get_label method."""
+            """Get button label."""
             return self.label
 
         def connect(self, signal, handler):
-            """Mock for connect method."""
+            """Connect signal to handler."""
             self.handlers[signal] = handler
-            return 1  # Handler ID
+            return id(handler)
 
         def emit(self, signal, *args):
-            """Mock for emit method."""
+            """Emit signal and call handler."""
             if signal in self.handlers:
-                handler = self.handlers[signal]
-                return handler(self, *args)
-            return None
+                self.handlers[signal](*args)
+
+        def clicked(self):
+            """Simulate click on the button."""
+            self.emit("clicked", self)
 
         def add_css_class(self, css_class):
-            """Mock for add_css_class method."""
+            """Add CSS class to the button."""
             if css_class not in self.css_classes:
                 self.css_classes.append(css_class)
 
         def remove_css_class(self, css_class):
-            """Mock for remove_css_class method."""
+            """Remove CSS class from the button."""
             if css_class in self.css_classes:
                 self.css_classes.remove(css_class)
+
+        def set_sensitive(self, sensitive):
+            """Set whether the button is sensitive (enabled)."""
+            self.sensitive = sensitive
+
+        def get_sensitive(self):
+            """Get whether the button is sensitive (enabled)."""
+            return getattr(self, "sensitive", True)
 
     class Scale:
         """Mock for Gtk.Scale."""
 
         def __init__(self, orientation=None, adjustment=None):
+            """Initialize Scale with optional orientation and adjustment."""
             self.orientation = orientation
             self.adjustment = adjustment
-            self.parent = None
-            self.value = 0
+            self.value = 0.0
             self.handlers = {}
+            self.parent = None
+            self.sensitive = True
 
         def set_value(self, value):
-            """Mock for set_value method."""
+            """Set the scale value."""
             self.value = value
             self.emit("value-changed")
 
         def get_value(self):
-            """Mock for get_value method."""
+            """Get the scale value."""
             return self.value
 
         def connect(self, signal, handler):
-            """Mock for connect method."""
+            """Connect a signal handler."""
             self.handlers[signal] = handler
-            return 1  # Handler ID
+            return id(handler)
 
         def emit(self, signal, *args):
-            """Mock for emit method."""
+            """Emit a signal and call handler."""
             if signal in self.handlers:
-                handler = self.handlers[signal]
-                return handler(self, *args)
+                if args:
+                    self.handlers[signal](*args)
+                else:
+                    self.handlers[signal](self)
+
+        def set_sensitive(self, sensitive):
+            """Set whether the scale is sensitive (enabled)."""
+            self.sensitive = sensitive
+
+        def get_sensitive(self):
+            """Get whether the scale is sensitive (enabled)."""
+            return self.sensitive
+
+        def list_signal_handlers(self, signal_name):
+            """List signal handlers for a given signal."""
+            if signal_name in self.handlers:
+                return [id(self.handlers[signal_name])]
+            return []
+
+        def disconnect(self, handler_id):
+            """Disconnect a signal handler by ID."""
+            for signal, handler in list(self.handlers.items()):
+                if id(handler) == handler_id:
+                    old_handler = self.handlers[signal]
+                    del self.handlers[signal]
+                    return old_handler
             return None
 
     class CssProvider:
@@ -459,14 +496,16 @@ class MockImageView(MockGtk.Box):
 
 # Mock ManualOverlayManager for testing
 class MockManualOverlayManager:
-    """Mock implementation of ManualOverlayManager for testing."""
+    """Mock for ManualOverlayManager class."""
 
     def __init__(self, image_view):
-        """Initialize the ManualOverlayManager with the provided image view."""
+        """Initialize MockManualOverlayManager."""
         self.image_view = image_view
-        self.overlays = {}  # Dictionary of overlay_id -> (x, y, radius)
+        self.overlays = {}  # Format: {id: (x, y, radius)}
         self.selected_overlay_id = None
         self.default_radius = 50
+        self.default_color = "#ff0000"
+        self.on_overlay_selected = None
 
     def create_overlay_at(self, x: int, y: int, radius: Optional[int] = None) -> str:
         """Create a new overlay at the specified coordinates."""
@@ -489,9 +528,17 @@ class MockManualOverlayManager:
         return overlay_id
 
     def select_overlay(self, overlay_id: str) -> None:
-        """Select the specified overlay."""
-        if overlay_id in self.overlays:
-            self.selected_overlay_id = overlay_id
+        """Select an overlay by ID.
+
+        Args:
+            overlay_id: ID of the overlay to select, or None to deselect
+        """
+        # Update selected overlay ID
+        self.selected_overlay_id = overlay_id
+
+        # Notify callback if exists
+        if self.on_overlay_selected is not None:
+            self.on_overlay_selected(overlay_id)
 
     def delete_selected_overlay(self) -> None:
         """Delete the currently selected overlay."""
@@ -540,6 +587,20 @@ class MockManualOverlayManager:
     def get_overlay_count(self) -> int:
         """Get the number of overlays."""
         return len(self.overlays)
+
+    def get_selected_overlay(self) -> Optional[Tuple[str, Tuple[int, int, int]]]:
+        """Get the currently selected overlay.
+
+        Returns:
+            Tuple of (overlay_id, (x, y, radius)) or None if no overlay is selected
+        """
+        if (
+            not self.selected_overlay_id
+            or self.selected_overlay_id not in self.overlays
+        ):
+            return None
+
+        return (self.selected_overlay_id, self.overlays[self.selected_overlay_id])
 
 
 # Determine which classes to export based on GTK availability

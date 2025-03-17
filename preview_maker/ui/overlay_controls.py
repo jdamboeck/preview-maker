@@ -4,7 +4,7 @@ This module contains the OverlayControlPanel class, which provides UI controls
 for manipulating overlays in the ManualOverlayManager.
 """
 
-from typing import Optional
+from typing import Optional, Any
 
 import gi
 
@@ -111,9 +111,13 @@ class OverlayControlPanel(Gtk.Box):
 
         # Color button
         self.color_button = Gtk.ColorButton()
+        self.color_button.set_name("overlay-color-button")
+
+        # Set initial color - use RGBA compatible with GTK 4.0
         rgba = Gdk.RGBA()
         rgba.parse("#ff0000")  # Default red color
         self.color_button.set_rgba(rgba)
+
         self.color_button.set_margin_bottom(12)
         self.color_button.connect("color-set", self._on_color_changed)
 
@@ -130,18 +134,20 @@ class OverlayControlPanel(Gtk.Box):
 
         # Create overlay button
         self.create_button = Gtk.Button(label="Create Overlay")
+        self.create_button.set_name("create-overlay-button")
         self.create_button.connect("clicked", self._on_create_clicked)
         button_box.append(self.create_button)
 
         # Delete button
-        self.delete_button = Gtk.Button(label="Delete")
+        self.delete_button = Gtk.Button(label="Delete Overlay")
+        self.delete_button.set_name("delete-overlay-button")
         self.delete_button.connect("clicked", self._on_delete_clicked)
         self.delete_button.add_css_class("destructive-action")
         button_box.append(self.delete_button)
 
         self.append(button_box)
 
-    def _on_radius_changed(self, scale: Gtk.Scale) -> None:
+    def _on_radius_changed(self, scale: Any) -> None:
         """Handle changes to the radius slider.
 
         Args:
@@ -151,7 +157,7 @@ class OverlayControlPanel(Gtk.Box):
         self.overlay_manager.set_overlay_radius(radius)
         logger.debug(f"Changed overlay radius to {radius}")
 
-    def _on_color_changed(self, button: Gtk.ColorButton) -> None:
+    def _on_color_changed(self, button: Any) -> None:
         """Handle changes to the color selection.
 
         Args:
@@ -176,7 +182,7 @@ class OverlayControlPanel(Gtk.Box):
 
         logger.debug(f"Changed overlay color to {hex_color}")
 
-    def _on_create_clicked(self, button: Gtk.Button) -> None:
+    def _on_create_clicked(self, button: Any) -> None:
         """Handle click on the create overlay button.
 
         Args:
@@ -194,7 +200,7 @@ class OverlayControlPanel(Gtk.Box):
         self.overlay_manager.create_overlay_at(center_x, center_y)
         logger.debug(f"Created overlay at center ({center_x}, {center_y})")
 
-    def _on_delete_clicked(self, button: Gtk.Button) -> None:
+    def _on_delete_clicked(self, button: Any) -> None:
         """Handle click on the delete overlay button.
 
         Args:
