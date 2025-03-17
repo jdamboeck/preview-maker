@@ -1,0 +1,8 @@
+{
+  "reportAttributeAccessIssue": "none",
+  "reportMissingImports": "warning",
+  "reportMissingTypeStubs": "warning",
+  "reportUnboundVariable": "none",
+  "useLibraryCodeForTypes": true,
+  "stubPath": "./typings"
+}
