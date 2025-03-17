@@ -102,6 +102,10 @@ class MockGtk:
             if css_class in self.css_classes:
                 self.css_classes.remove(css_class)
 
+        def get_children(self):
+            """Get all children widgets."""
+            return self.children
+
     class Button:
         """Mock for Gtk.Button."""
 
@@ -603,6 +607,623 @@ class MockManualOverlayManager:
         return (self.selected_overlay_id, self.overlays[self.selected_overlay_id])
 
 
+# Mock SettingsDialog for testing
+class MockSettingsDialog:
+    """Mock Settings Dialog for testing."""
+
+    def __init__(self, parent_window):
+        """Initialize the dialog."""
+        self.parent = parent_window
+        self.config = None
+        self.is_visible = False
+
+        # Main container
+        self.content_area = MockGtk.Box(orientation=MockGtk.Orientation.VERTICAL)
+
+        # Create notebook for tabs
+        self.notebook = ExtendedMockGtk.Notebook()
+        self.notebook.set_name("settings-notebook")
+
+        # Create tabs
+        self._general_tab = self._create_general_tab()
+        self._api_tab = self._create_api_tab()
+        self._overlay_tab = self._create_overlay_tab()
+        self._export_tab = self._create_export_tab()
+
+        # Add tabs to notebook
+        self.notebook.append_page(
+            self._general_tab, ExtendedMockGtk.Label(label="General")
+        )
+        self.notebook.append_page(self._api_tab, ExtendedMockGtk.Label(label="API"))
+        self.notebook.append_page(
+            self._overlay_tab, ExtendedMockGtk.Label(label="Overlays")
+        )
+        self.notebook.append_page(
+            self._export_tab, ExtendedMockGtk.Label(label="Export")
+        )
+
+        self.content_area.append(self.notebook)
+
+        # Button area
+        self.action_area = MockGtk.Box(orientation=MockGtk.Orientation.HORIZONTAL)
+
+        # Create buttons
+        self.cancel_button = ExtendedMockGtk.Button(label="Cancel")
+        self.apply_button = ExtendedMockGtk.Button(label="Apply")
+        self.ok_button = ExtendedMockGtk.Button(label="OK")
+
+        self.cancel_button.set_name("cancel-button")
+        self.apply_button.set_name("apply-button")
+        self.ok_button.set_name("ok-button")
+
+        # Add buttons to action area
+        self.action_area.append(self.cancel_button)
+        self.action_area.append(self.apply_button)
+        self.action_area.append(self.ok_button)
+
+        self.content_area.append(self.action_area)
+
+        # Set up button callbacks
+        self.apply_callback = None
+        self.cancel_callback = None
+        self.ok_callback = None
+
+    def _create_general_tab(self):
+        """Create the general settings tab."""
+        tab = MockGtk.Box(orientation=MockGtk.Orientation.VERTICAL)
+
+        # Debug mode checkbox
+        self._debug_checkbox = ExtendedMockGtk.CheckButton()
+        self._debug_checkbox.set_label("Debug Mode")
+        tab.append(self._debug_checkbox)
+
+        # Window size settings
+        size_box = MockGtk.Box(orientation=MockGtk.Orientation.HORIZONTAL)
+        width_label = ExtendedMockGtk.Label(label="Window Width:")
+        self._width_entry = ExtendedMockGtk.Entry()
+        self._width_entry.set_name("window-width-entry")
+
+        height_label = ExtendedMockGtk.Label(label="Window Height:")
+        self._height_entry = ExtendedMockGtk.Entry()
+        self._height_entry.set_name("window-height-entry")
+
+        size_box.append(width_label)
+        size_box.append(self._width_entry)
+        size_box.append(height_label)
+        size_box.append(self._height_entry)
+
+        tab.append(size_box)
+        return tab
+
+    def _create_api_tab(self):
+        """Create the API settings tab."""
+        tab = MockGtk.Box(orientation=MockGtk.Orientation.VERTICAL)
+
+        # API key entry
+        api_key_box = MockGtk.Box(orientation=MockGtk.Orientation.HORIZONTAL)
+        api_key_label = ExtendedMockGtk.Label(label="API Key:")
+        self._api_key_entry = ExtendedMockGtk.Entry()
+        self._api_key_entry.set_name("api-key-entry")
+        self._api_key_entry.set_visibility(False)  # Hide API key
+
+        api_key_box.append(api_key_label)
+        api_key_box.append(self._api_key_entry)
+        tab.append(api_key_box)
+
+        # Model selection combobox
+        model_box = MockGtk.Box(orientation=MockGtk.Orientation.HORIZONTAL)
+        model_label = ExtendedMockGtk.Label(label="Model:")
+        self._model_combo = ExtendedMockGtk.ComboBoxText()
+        self._model_combo.set_name("model-combo")
+
+        # Add models
+        self._model_combo.append_text("gemini-1.5-flash")
+        self._model_combo.append_text("gemini-1.5-pro")
+        self._model_combo.append_text("gemini-1.0-pro-vision")
+
+        model_box.append(model_label)
+        model_box.append(self._model_combo)
+        tab.append(model_box)
+
+        # Temperature setting
+        temp_box = MockGtk.Box(orientation=MockGtk.Orientation.HORIZONTAL)
+        temp_label = ExtendedMockGtk.Label(label="Temperature:")
+        self._temp_scale = ExtendedMockGtk.Scale(
+            orientation=MockGtk.Orientation.HORIZONTAL
+        )
+        self._temp_scale.set_name("temperature-scale")
+
+        temp_box.append(temp_label)
+        temp_box.append(self._temp_scale)
+        tab.append(temp_box)
+
+        return tab
+
+    def _create_overlay_tab(self):
+        """Create the overlay settings tab."""
+        tab = MockGtk.Box(orientation=MockGtk.Orientation.VERTICAL)
+
+        # Selection ratio scale
+        ratio_box = MockGtk.Box(orientation=MockGtk.Orientation.HORIZONTAL)
+        ratio_label = ExtendedMockGtk.Label(label="Selection Ratio:")
+        self._ratio_scale = ExtendedMockGtk.Scale(
+            orientation=MockGtk.Orientation.HORIZONTAL
+        )
+        self._ratio_scale.set_name("selection-ratio-scale")
+
+        ratio_box.append(ratio_label)
+        ratio_box.append(self._ratio_scale)
+        tab.append(ratio_box)
+
+        # Zoom factor scale
+        zoom_box = MockGtk.Box(orientation=MockGtk.Orientation.HORIZONTAL)
+        zoom_label = ExtendedMockGtk.Label(label="Zoom Factor:")
+        self._zoom_scale = ExtendedMockGtk.Scale(
+            orientation=MockGtk.Orientation.HORIZONTAL
+        )
+        self._zoom_scale.set_name("zoom-factor-scale")
+
+        zoom_box.append(zoom_label)
+        zoom_box.append(self._zoom_scale)
+        tab.append(zoom_box)
+
+        # Overlay color
+        color_box = MockGtk.Box(orientation=MockGtk.Orientation.HORIZONTAL)
+        color_label = ExtendedMockGtk.Label(label="Overlay Color:")
+        self._color_button = ExtendedMockGtk.ColorButton()
+        self._color_button.set_name("overlay-color-button")
+
+        color_box.append(color_label)
+        color_box.append(self._color_button)
+        tab.append(color_box)
+
+        # Overlay opacity
+        opacity_box = MockGtk.Box(orientation=MockGtk.Orientation.HORIZONTAL)
+        opacity_label = ExtendedMockGtk.Label(label="Overlay Opacity:")
+        self._opacity_scale = ExtendedMockGtk.Scale(
+            orientation=MockGtk.Orientation.HORIZONTAL
+        )
+        self._opacity_scale.set_name("overlay-opacity-scale")
+
+        opacity_box.append(opacity_label)
+        opacity_box.append(self._opacity_scale)
+        tab.append(opacity_box)
+
+        return tab
+
+    def _create_export_tab(self):
+        """Create the export settings tab."""
+        tab = MockGtk.Box(orientation=MockGtk.Orientation.VERTICAL)
+
+        # PNG compression scale
+        png_box = MockGtk.Box(orientation=MockGtk.Orientation.HORIZONTAL)
+        png_label = ExtendedMockGtk.Label(label="PNG Compression:")
+        self._png_scale = ExtendedMockGtk.Scale(
+            orientation=MockGtk.Orientation.HORIZONTAL
+        )
+        self._png_scale.set_name("png-compression-scale")
+
+        png_box.append(png_label)
+        png_box.append(self._png_scale)
+        tab.append(png_box)
+
+        # High quality resampling checkbox
+        self._high_quality_checkbox = ExtendedMockGtk.CheckButton()
+        self._high_quality_checkbox.set_label("High Quality Resampling")
+        tab.append(self._high_quality_checkbox)
+
+        return tab
+
+    def show(self):
+        """Show the dialog."""
+        self._visible = True
+        # Load current settings
+        from preview_maker.core.config import config_manager
+
+        config = config_manager.get_config()
+
+        # General tab
+        self._debug_checkbox.set_active(config.debug_mode)
+        self._width_entry.set_text(str(config.window_width))
+        self._height_entry.set_text(str(config.window_height))
+
+        # API tab
+        self._api_key_entry.set_text("")  # Don't show actual API key
+
+        model_index = 0
+        for i in range(self._model_combo.get_model().iter_n_children(None)):
+            if self._model_combo.get_model().get_value(i, 0) == config.model_name:
+                model_index = i
+                break
+        self._model_combo.set_active(model_index)
+
+        self._temp_scale.set_value(config.temperature)
+
+        # Overlay tab
+        self._ratio_scale.set_value(config.selection_ratio)
+        self._zoom_scale.set_value(config.zoom_factor)
+        self._opacity_scale.set_value(config.overlay_opacity)
+
+        # Export tab
+        self._png_scale.set_value(config.png_compression)
+        self._high_quality_checkbox.set_active(config.high_resampling == 1)
+
+        # Store original settings for cancel
+        self._current_settings = {
+            "debug_mode": config.debug_mode,
+            "window_width": config.window_width,
+            "window_height": config.window_height,
+            "model_name": config.model_name,
+            "temperature": config.temperature,
+            "selection_ratio": config.selection_ratio,
+            "zoom_factor": config.zoom_factor,
+            "overlay_opacity": config.overlay_opacity,
+            "png_compression": config.png_compression,
+            "high_resampling": config.high_resampling,
+        }
+
+    def _on_apply_clicked(self, button):
+        """Handle apply button click."""
+        self._apply_settings()
+
+    def _on_cancel_clicked(self, button):
+        """Handle cancel button click."""
+        self._visible = False
+        for handler_id, handler in self._response_handlers:
+            handler(self, -6)  # Gtk.ResponseType.CANCEL
+
+    def _on_ok_clicked(self, button):
+        """Handle OK button click."""
+        self._apply_settings()
+        self._visible = False
+        for handler_id, handler in self._response_handlers:
+            handler(self, -5)  # Gtk.ResponseType.OK
+
+    def _apply_settings(self):
+        """Apply the current settings."""
+        from preview_maker.core.config import config_manager
+
+        # Collect settings from UI
+        updates = {
+            "debug_mode": self._debug_checkbox.get_active(),
+            "window_width": int(self._width_entry.get_text()),
+            "window_height": int(self._height_entry.get_text()),
+            "model_name": self._model_combo.get_active_text(),
+            "temperature": self._temp_scale.get_value(),
+            "selection_ratio": self._ratio_scale.get_value(),
+            "zoom_factor": self._zoom_scale.get_value(),
+            "overlay_opacity": self._opacity_scale.get_value(),
+            "png_compression": int(self._png_scale.get_value()),
+            "high_resampling": 1 if self._high_quality_checkbox.get_active() else 0,
+        }
+
+        # Update API key if provided (non-empty)
+        api_key = self._api_key_entry.get_text()
+        if api_key:
+            updates["gemini_api_key"] = api_key
+
+        # Apply updates
+        config_manager.update_config(updates)
+
+    def connect(self, signal, handler):
+        """Connect a signal handler.
+
+        Args:
+            signal: The signal name
+            handler: The handler function
+
+        Returns:
+            Handler ID
+        """
+        handler_id = len(self._response_handlers) + 1
+        self._response_handlers.append((handler_id, handler))
+        return handler_id
+
+    def get_content_area(self):
+        """Return the dialog's content area."""
+        return self.content_area
+
+    def get_action_area(self):
+        """Get the action area of the dialog.
+
+        Returns:
+            The action area box
+        """
+        return self.action_area
+
+    def get_transient_for(self):
+        """Get the parent window.
+
+        Returns:
+            The parent window
+        """
+        return self.parent
+
+    def is_visible(self):
+        """Check if the dialog is visible.
+
+        Returns:
+            True if visible, False otherwise
+        """
+        return self._visible
+
+    def destroy(self):
+        """Destroy the dialog."""
+        self._visible = False
+
+
+# Mock classes for GTK components that don't exist
+class ExtendedMockGtk(MockGtk):
+    """Extended mock GTK classes with additional methods."""
+
+    class Label:
+        """Mock for Gtk.Label."""
+
+        def __init__(self, label=""):
+            self.label_text = label
+            self.props = mock.MagicMock()
+            self.props.label = label
+            self.style_context = mock.MagicMock()
+            self.name = ""
+
+        def set_text(self, text):
+            self.label_text = text
+            self.props.label = text
+
+        def get_text(self):
+            return self.label_text
+
+        def set_name(self, name):
+            self.name = name
+
+    class Button:
+        """Mock for Gtk.Button."""
+
+        def __init__(self, label=""):
+            self.label_text = label
+            self.name = ""
+            self.props = mock.MagicMock()
+
+        def set_label(self, label):
+            self.label_text = label
+
+        def get_label(self):
+            return self.label_text
+
+        def set_name(self, name):
+            self.name = name
+
+    class Entry:
+        """Mock for Gtk.Entry."""
+
+        def __init__(self):
+            self.text = ""
+            self.visible = True
+            self.name = ""
+            self.props = mock.MagicMock()
+
+        def get_text(self):
+            return self.text
+
+        def set_text(self, text):
+            self.text = text
+
+        def set_visibility(self, visible):
+            self.visible = visible
+
+        def set_name(self, name):
+            self.name = name
+
+    class CheckButton:
+        """Mock for Gtk.CheckButton."""
+
+        def __init__(self, label=""):
+            """Initialize the check button."""
+            self.label_text = label
+            self.active = False
+            self.name = ""
+            self.props = mock.MagicMock()
+            self.props.active = self.active
+
+        def get_active(self):
+            """Get the active state."""
+            return self.active
+
+        def set_active(self, active):
+            """Set the active state."""
+            self.active = active
+            self.props.active = active
+
+        def set_label(self, label):
+            """Set the label text."""
+            self.label_text = label
+
+        def get_label(self):
+            """Get the label text."""
+            return self.label_text
+
+        def set_name(self, name):
+            """Set the name of the check button."""
+            self.name = name
+
+    class ComboBoxText:
+        """Mock for Gtk.ComboBoxText."""
+
+        def __init__(self):
+            """Initialize the combo box."""
+            self.items = []
+            self.active = -1
+            self.name = ""
+            self.props = mock.MagicMock()
+
+        def append_text(self, text):
+            """Add an item to the combo box."""
+            self.items.append(text)
+
+        def get_active(self):
+            """Get the active item index."""
+            return self.active
+
+        def set_active(self, index):
+            """Set the active item by index."""
+            if 0 <= index < len(self.items):
+                self.active = index
+
+        def get_active_text(self):
+            """Get the text of the active item."""
+            if 0 <= self.active < len(self.items):
+                return self.items[self.active]
+            return None
+
+        def set_name(self, name):
+            """Set the name of the combo box."""
+            self.name = name
+
+    class Notebook:
+        """Mock for Gtk.Notebook."""
+
+        def __init__(self):
+            """Initialize the notebook."""
+            self.pages = []
+            self.tabs = []
+            self.current_page = 0
+            self.name = ""
+            self.props = mock.MagicMock()
+
+        def append_page(self, widget, tab_label):
+            """Add a page to the notebook."""
+            self.pages.append(widget)
+            self.tabs.append(tab_label)
+            return len(self.pages) - 1
+
+        def get_current_page(self):
+            """Get the current page index."""
+            return self.current_page
+
+        def set_current_page(self, page_num):
+            """Set the current page index."""
+            if 0 <= page_num < len(self.pages):
+                self.current_page = page_num
+
+        def get_nth_page(self, page_num):
+            """Get the page at the given index."""
+            if 0 <= page_num < len(self.pages):
+                return self.pages[page_num]
+            return None
+
+        def set_name(self, name):
+            """Set the name of the notebook."""
+            self.name = name
+
+    class Scale:
+        """Mock for Gtk.Scale."""
+
+        def __init__(self, orientation=None, adjustment=None):
+            """Initialize Scale with optional orientation and adjustment."""
+            self.value = 0.0
+            self.orientation = orientation
+            self.adjustment = adjustment
+            self.name = ""
+            self.props = mock.MagicMock()
+            self.props.value = self.value
+
+        def get_value(self):
+            """Get the scale value."""
+            return self.value
+
+        def set_value(self, value):
+            """Set the scale value."""
+            self.value = value
+            self.props.value = value
+
+        def set_range(self, min_value, max_value):
+            """Set the range of the scale."""
+            self.min_value = min_value
+            self.max_value = max_value
+
+        def set_name(self, name):
+            """Set the name of the scale."""
+            self.name = name
+
+    class ColorButton:
+        """Mock for Gtk.ColorButton."""
+
+        def __init__(self):
+            """Initialize the color button."""
+            self.rgba = None
+            self.name = ""
+            self.props = mock.MagicMock()
+
+        def get_rgba(self):
+            """Get the RGBA color."""
+            return self.rgba
+
+        def set_rgba(self, rgba):
+            """Set the RGBA color."""
+            self.rgba = rgba
+
+        def set_name(self, name):
+            """Set the name of the color button."""
+            self.name = name
+
+
+class MockNotebookPage:
+    """Mock for a notebook page."""
+
+    def __init__(self, page, label):
+        """Initialize the notebook page."""
+        self.page = page
+        self.label = label
+
+    def get_child(self):
+        """Get the page content."""
+        return self.page
+
+    def get_tab_label(self):
+        """Get the tab label."""
+        return self.label
+
+
+class MockTreeModel:
+    """Mock for Gtk.TreeModel."""
+
+    def __init__(self, items):
+        """Initialize the tree model."""
+        self.items = items
+
+    def iter_n_children(self, iter_):
+        """Get the number of children."""
+        return len(self.items)
+
+    def get_value(self, index, column):
+        """Get the value at the given index and column."""
+        if 0 <= index < len(self.items):
+            return self.items[index]
+        return None
+
+
+class MockRGBA:
+    """Mock for Gdk.RGBA."""
+
+    def __init__(self, red, green, blue, alpha):
+        """Initialize the RGBA color."""
+        self.red = red
+        self.green = green
+        self.blue = blue
+        self.alpha = alpha
+
+    def to_string(self):
+        """Convert to string representation."""
+        return f"rgba({self.red:.1f},{self.green:.1f},{self.blue:.1f},{self.alpha:.1f})"
+
+
+def process_events():
+    """Process pending GTK events."""
+    # In a real GTK application, this would process pending events
+    # For our mock, we do nothing
+    pass
+
+
 # Determine which classes to export based on GTK availability
 if GTK_AVAILABLE and RealGtk is not None:
     # Use real GTK classes but export our mocks too
@@ -611,6 +1232,6 @@ if GTK_AVAILABLE and RealGtk is not None:
     GLib = RealGLib
 else:
     # Use mock GTK classes
-    Gtk = MockGtk
+    Gtk = ExtendedMockGtk
     Gdk = MockGdk
     GLib = MockGLib
