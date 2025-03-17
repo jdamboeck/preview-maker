@@ -23,6 +23,9 @@ from preview_maker.ui.image_view import ImageView
 from preview_maker.ui.overlay_manager import OverlayManager
 from preview_maker.ui.manual_overlay_manager import ManualOverlayManager
 from preview_maker.ui.overlay_controls import OverlayControlPanel
+from preview_maker.ui.settings_dialog import SettingsDialog
+from preview_maker.ui.analysis_results import AnalysisResultsDisplay
+from preview_maker.core.config import ConfigManager
 
 
 class ApplicationWindow(Gtk.ApplicationWindow):
@@ -130,6 +133,11 @@ class ApplicationWindow(Gtk.ApplicationWindow):
         self.overlay_controls = OverlayControlPanel(self.manual_overlay_manager)
         self.overlay_controls.set_visible(False)
         self.left_panel.append(self.overlay_controls)
+
+        # Create analysis results display (initially hidden)
+        self.analysis_display = AnalysisResultsDisplay(self)
+        self.analysis_display.set_visible(False)
+        self.content_box.append(self.analysis_display)
 
         # Create status bar
         self.status_bar = Gtk.Label(label="Ready")
@@ -440,10 +448,7 @@ class ApplicationWindow(Gtk.ApplicationWindow):
 
     def _show_settings_dialog(self) -> None:
         """Show the settings dialog."""
-        from preview_maker.ui.settings_dialog import SettingsDialog
-        from preview_maker.core.config import ConfigManager
-
-        dialog = SettingsDialog(self, ConfigManager())
+        dialog = SettingsDialog(self, ConfigManager.get_instance())
         dialog.show()
 
     def _show_error_dialog(self, message: str) -> None:
@@ -462,3 +467,28 @@ class ApplicationWindow(Gtk.ApplicationWindow):
         dialog.format_secondary_text(message)
         dialog.connect("response", lambda d, r: d.destroy())
         dialog.show()
+
+    def display_analysis_results(self, results):
+        """Display analysis results in the UI.
+
+        Args:
+            results: The analysis results dictionary
+        """
+        logger.debug(f"Displaying analysis results: {results}")
+
+        if not results:
+            self.analysis_display.clear()
+            self.analysis_display.set_visible(False)
+            return
+
+        self.analysis_display.display_result(results)
+        self.analysis_display.set_visible(True)
+
+        # Update status
+        self.status_bar.set_text("Analysis complete")
+
+    def clear_analysis_results(self):
+        """Clear the analysis results display."""
+        self.analysis_display.clear()
+        self.analysis_display.set_visible(False)
+        self.status_bar.set_text("Analysis cleared")

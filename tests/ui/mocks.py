@@ -609,13 +609,13 @@ class MockManualOverlayManager:
 
 # Mock SettingsDialog for testing
 class MockSettingsDialog:
-    """Mock Settings Dialog for testing."""
+    """Mock implementation of the SettingsDialog for headless testing."""
 
     def __init__(self, parent_window):
         """Initialize the dialog."""
         self.parent = parent_window
         self.config = None
-        self.is_visible = False
+        self.visible = False
 
         # Main container
         self.content_area = MockGtk.Box(orientation=MockGtk.Orientation.VERTICAL)
@@ -816,7 +816,7 @@ class MockSettingsDialog:
 
     def show(self):
         """Show the dialog."""
-        self._visible = True
+        self.visible = True
         # Load current settings
         from preview_maker.core.config import config_manager
 
@@ -868,14 +868,14 @@ class MockSettingsDialog:
 
     def _on_cancel_clicked(self, button):
         """Handle cancel button click."""
-        self._visible = False
+        self.visible = False
         for handler_id, handler in self._response_handlers:
             handler(self, -6)  # Gtk.ResponseType.CANCEL
 
     def _on_ok_clicked(self, button):
         """Handle OK button click."""
         self._apply_settings()
-        self._visible = False
+        self.visible = False
         for handler_id, handler in self._response_handlers:
             handler(self, -5)  # Gtk.ResponseType.OK
 
@@ -945,16 +945,263 @@ class MockSettingsDialog:
         Returns:
             True if visible, False otherwise
         """
-        return self._visible
+        return self.visible
 
     def destroy(self):
         """Destroy the dialog."""
-        self._visible = False
+        self.visible = False
 
 
-# Mock classes for GTK components that don't exist
+class MockAnalysisResultsDisplay(MockGtk.Box):
+    """Mock implementation of the AnalysisResultsDisplay for headless testing."""
+
+    def __init__(self, parent_window):
+        """Initialize a mock analysis results display.
+
+        Args:
+            parent_window: The parent window
+        """
+        super().__init__(orientation=MockGtk.Orientation.VERTICAL, spacing=12)
+        self.parent_window = parent_window
+
+        # Result storage
+        self._result = None
+        self._error = None
+
+        # UI components
+        self._scroll_window = MockGtk.Box()
+        self._text_view = MockGtk.Box()
+        self._buttons_box = MockGtk.Box(
+            orientation=MockGtk.Orientation.HORIZONTAL, spacing=6
+        )
+
+        # Action buttons
+        self._copy_button = MockGtk.Button(label="Copy to Clipboard")
+        self._save_button = MockGtk.Button(label="Save to File")
+        self._expand_all_button = MockGtk.Button(label="Expand All")
+        self._collapse_all_button = MockGtk.Button(label="Collapse All")
+
+        self._buttons_box.append(self._copy_button)
+        self._buttons_box.append(self._save_button)
+        self._buttons_box.append(self._expand_all_button)
+        self._buttons_box.append(self._collapse_all_button)
+
+        # Section containers (expandable)
+        self._sections = {
+            "description": {
+                "container": MockGtk.Box(),
+                "expander": MockGtk.Button(label="Description"),
+                "content": MockGtk.Box(),
+                "expanded": True,
+            },
+            "key_points": {
+                "container": MockGtk.Box(),
+                "expander": MockGtk.Button(label="Key Points"),
+                "content": MockGtk.Box(),
+                "expanded": True,
+            },
+            "technical_details": {
+                "container": MockGtk.Box(),
+                "expander": MockGtk.Button(label="Technical Details"),
+                "content": MockGtk.Box(),
+                "expanded": True,
+            },
+            "metadata": {
+                "container": MockGtk.Box(),
+                "expander": MockGtk.Button(label="Metadata"),
+                "content": MockGtk.Box(),
+                "expanded": True,
+            },
+        }
+
+        # Main container
+        self._main_container = MockGtk.Box(
+            orientation=MockGtk.Orientation.VERTICAL, spacing=12
+        )
+
+        # Append everything
+        self.append(self._main_container)
+        self._main_container.append(self._text_view)
+        self._main_container.append(self._buttons_box)
+
+    def display_result(self, result):
+        """Display an analysis result.
+
+        Args:
+            result: The analysis result dictionary
+        """
+        self._result = result
+        self._error = None
+
+        # Clear existing content
+        for section in self._sections.values():
+            section["content"].remove_css_class("content-visible")
+            section["content"].add_css_class("content-hidden")
+
+        # In a real implementation, we would populate the text view
+        # For the mock, we just store the result
+
+    def clear(self):
+        """Clear the display."""
+        self._result = None
+        self._error = None
+
+    def has_result(self):
+        """Check if there is a result to display.
+
+        Returns:
+            bool: True if there is a result, False otherwise
+        """
+        return self._result is not None
+
+    def get_result(self):
+        """Get the current result.
+
+        Returns:
+            dict: The current result or None
+        """
+        return self._result
+
+    def display_error(self, error_message):
+        """Display an error message.
+
+        Args:
+            error_message: The error message to display
+        """
+        self._error = error_message
+        self._result = None
+
+    def has_error(self):
+        """Check if there is an error message.
+
+        Returns:
+            bool: True if there is an error, False otherwise
+        """
+        return self._error is not None
+
+    def get_error(self):
+        """Get the current error message.
+
+        Returns:
+            str: The current error message or None
+        """
+        return self._error
+
+    def copy_to_clipboard(self):
+        """Copy the result to the clipboard."""
+        # In a real implementation, this would copy to the clipboard
+        # For the mock, we get a mock clipboard and set the text
+        clipboard = self._get_clipboard()
+
+        if self._result:
+            formatted_text = str(self._result)
+            clipboard.set_text(formatted_text, -1)
+
+    def save_to_file(self, filepath=None):
+        """Save the result to a file.
+
+        Args:
+            filepath: Optional filepath to save to. If None, a dialog will be shown.
+
+        Returns:
+            bool: True if saved successfully, False otherwise
+        """
+        if not self._result:
+            return False
+
+        if not filepath:
+            filepath = self._show_save_dialog()
+
+        if not filepath:
+            return False
+
+        # In a real implementation, this would write to a file
+        # For the mock, we create an empty file
+        with open(filepath, "w") as f:
+            f.write(str(self._result))
+
+        return True
+
+    def _show_save_dialog(self):
+        """Show a file save dialog.
+
+        Returns:
+            str: The selected filepath or None
+        """
+        # Mock implementation returns a dummy path
+        return "/tmp/analysis_results.txt"
+
+    def _get_clipboard(self):
+        """Get the system clipboard.
+
+        Returns:
+            A mock clipboard
+        """
+        # Return a mock clipboard
+        return MockClipboard()
+
+    def is_section_expanded(self, section_name):
+        """Check if a section is expanded.
+
+        Args:
+            section_name: The name of the section
+
+        Returns:
+            bool: True if expanded, False otherwise
+        """
+        if section_name not in self._sections:
+            return False
+
+        return self._sections[section_name]["expanded"]
+
+    def set_section_expanded(self, section_name, expanded):
+        """Set whether a section is expanded.
+
+        Args:
+            section_name: The name of the section
+            expanded: True to expand, False to collapse
+        """
+        if section_name not in self._sections:
+            return
+
+        self._sections[section_name]["expanded"] = expanded
+
+        # Update CSS classes for visibility
+        if expanded:
+            self._sections[section_name]["content"].remove_css_class("content-hidden")
+            self._sections[section_name]["content"].add_css_class("content-visible")
+        else:
+            self._sections[section_name]["content"].remove_css_class("content-visible")
+            self._sections[section_name]["content"].add_css_class("content-hidden")
+
+
+class MockClipboard:
+    """Mock implementation of the clipboard."""
+
+    def __init__(self):
+        """Initialize a mock clipboard."""
+        self.text = None
+
+    def set_text(self, text, length=-1):
+        """Set text on the clipboard.
+
+        Args:
+            text: The text to set
+            length: The length of the text, or -1 for all
+        """
+        self.text = text
+
+    def get_text(self):
+        """Get text from the clipboard.
+
+        Returns:
+            str: The clipboard text
+        """
+        return self.text
+
+
 class ExtendedMockGtk(MockGtk):
-    """Extended mock GTK classes with additional methods."""
+    """Extended mock Gtk with additional widget classes."""
 
     class Label:
         """Mock for Gtk.Label."""

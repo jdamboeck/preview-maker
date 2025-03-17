@@ -11,6 +11,7 @@ from preview_maker.ui.overlay_manager import OverlayManager
 from preview_maker.ui.overlay_controls import OverlayControlPanel
 from preview_maker.ui.manual_overlay_manager import ManualOverlayManager
 from preview_maker.ui.settings_dialog import SettingsDialog
+from preview_maker.ui.analysis_results import AnalysisResultsDisplay
 
 __all__ = [
     "ApplicationWindow",
@@ -19,4 +20,5 @@ __all__ = [
     "OverlayControlPanel",
     "ManualOverlayManager",
     "SettingsDialog",
+    "AnalysisResultsDisplay",
 ]
