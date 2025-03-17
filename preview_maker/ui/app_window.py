@@ -440,44 +440,11 @@ class ApplicationWindow(Gtk.ApplicationWindow):
 
     def _show_settings_dialog(self) -> None:
         """Show the settings dialog."""
-        dialog = Gtk.Dialog(
-            title="Settings",
-            parent=self,
-            modal=True,
-            destroy_with_parent=True,
-        )
-        dialog.add_button("_Close", Gtk.ResponseType.CLOSE)
+        from preview_maker.ui.settings_dialog import SettingsDialog
+        from preview_maker.core.config import ConfigManager
 
-        # Create dialog content
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        dialog.get_content_area().append(box)
-
-        # API Key section
-        api_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        box.append(api_box)
-
-        api_label = Gtk.Label(label="Gemini API Key:")
-        api_box.append(api_label)
-
-        api_button = Gtk.Button(label="Change API Key")
-        api_button.connect("clicked", self._on_api_key_button_clicked, dialog)
-        api_box.append(api_button)
-
-        # Other settings can be added here
-
-        dialog.connect("response", lambda d, r: d.destroy())
+        dialog = SettingsDialog(self, ConfigManager())
         dialog.show()
-
-    def _on_api_key_button_clicked(
-        self, button: Gtk.Button, parent_dialog: Gtk.Dialog
-    ) -> None:
-        """Handle API key button click.
-
-        Args:
-            button: The button that was clicked
-            parent_dialog: The parent dialog
-        """
-        self._show_api_key_dialog()
 
     def _show_error_dialog(self, message: str) -> None:
         """Show an error dialog.
