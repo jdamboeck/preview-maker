@@ -2,6 +2,18 @@
 
 This technical roadmap outlines the implementation sequence for the Preview Maker rebuild, focusing on the core functionality and technical requirements.
 
+## Implementation Timeline
+
+| Phase             | Target Date       | Components                                                        | Status      |
+| ----------------- | ----------------- | ----------------------------------------------------------------- | ----------- |
+| Foundation Layer  | March 15, 2025    | Configuration Manager, Logging System, Event Communication System | Completed   |
+| Image Processing  | March 15, 2025    | Image Processor, Image Cache, Circular Overlay Generation         | Completed   |
+| AI Integration    | March 15-16, 2025 | Gemini API Client, Image Analyzer, Response Parser                | In Progress |
+| GTK UI Framework  | March 16-30, 2025 | Application Window, Image Viewer, Overlay Management              | In Progress |
+| Integration Layer | April 1-20, 2025  | Component Integration, Event-based Communication                  | Not Started |
+| Diagnostic System | April 21-30, 2025 | Performance Monitoring, Error Detection                           | Not Started |
+| Final Release     | June 15, 2025     | Final Testing, Documentation, Release                             | Not Started |
+
 ## Core Components and Implementation Order
 
 ### 1. Foundation Layer
@@ -21,11 +33,13 @@ class ConfigurationManager:
 ```
 
 **Implementation Priorities:**
+
 - Configuration system with TOML support
 - Error handling with custom exception types
 - Logging infrastructure with context tracking
 
 **Success Criteria:**
+
 - Configuration loads in < 50ms
 - Test coverage > 80%
 
@@ -46,12 +60,14 @@ def process_image(image_path: Path) -> ProcessedImage:
 ```
 
 **Implementation Priorities:**
+
 - Efficient image loading with validation
 - Caching layer for processed images
 - Thumbnail generation
 - Memory management for large images
 
 **Success Criteria:**
+
 - Load images < 200ms for 12MP images
 - Memory usage < 100MB during processing
 
@@ -80,12 +96,14 @@ def analyze_image(image_path: Path, context: str = "") -> List[Dict]:
 ```
 
 **Implementation Priorities:**
+
 - API integration with error handling
 - Response caching and validation
 - Fallback mechanism using basic CV techniques
 - Prompt engineering for optimal results
 
 **Success Criteria:**
+
 - Success rate > 90% for suitable images
 - Graceful degradation when API unavailable
 
@@ -110,12 +128,14 @@ def initialize_ui():
 ```
 
 **Implementation Priorities:**
+
 - Modern GTK 4.0 widget architecture
 - Event controllers instead of signal handlers
 - Background thread processing
 - GTK-specific drawing for overlays
 
 **Success Criteria:**
+
 - UI maintains > 30fps during operations
 - Drag-and-drop works with single images and folders
 
@@ -135,12 +155,14 @@ class PreviewMakerApp:
 ```
 
 **Implementation Priorities:**
+
 - Event-based communication between components
 - Proper dependency injection
 - Feature integration with error propagation
 - User feedback mechanisms
 
 **Success Criteria:**
+
 - Complete functionality with < 1s response time
 - Zero crashes in extended testing
 
@@ -183,12 +205,14 @@ class DiagnosticSystem:
 ```
 
 **Implementation Priorities:**
+
 - Component-specific diagnostic tools
 - Performance monitoring
 - Memory usage tracking
 - Automated error detection
 
 **Success Criteria:**
+
 - Can identify >90% of common issues
 - Provides actionable diagnostics data
 - Minimal performance impact when enabled
@@ -233,14 +257,14 @@ def test_process_large_image_with_diagnostics():
 
 ## Technical Dependencies
 
-| Component | Depends On | Notes |
-|-----------|------------|-------|
-| Configuration | None | Foundation component |
-| Image Processor | Configuration | Needs config for cache size |
-| AI Service | Configuration, Image Processor | Needs processed images |
-| UI Components | Configuration | For user preferences |
-| Integration | All components | Final integration step |
-| Diagnostics | All components | Monitors all components |
+| Component       | Depends On                     | Notes                       |
+| --------------- | ------------------------------ | --------------------------- |
+| Configuration   | None                           | Foundation component        |
+| Image Processor | Configuration                  | Needs config for cache size |
+| AI Service      | Configuration, Image Processor | Needs processed images      |
+| UI Components   | Configuration                  | For user preferences        |
+| Integration     | All components                 | Final integration step      |
+| Diagnostics     | All components                 | Monitors all components     |
 
 ## Performance Requirements
 
